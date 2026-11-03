@@ -4,8 +4,50 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChromeNavigationFilterTest {
-    private fun filter(vararg patterns: String, on: Boolean = true, extras: Set<String> = emptySet()) =
-        ChromeNavigationFilter(ChromeNavigationConfig(on, patterns.toList(), extras))
+    private fun filter(vararg patterns: String, on: Boolean = true, extras: Set<String> = emptySet(),
+                       rules: List<DomainRule> = emptyList()) =
+        ChromeNavigationFilter(ChromeNavigationConfig(on, patterns.toList(), extras, rules))
+
+    @Test fun savedSuffixAllowsGrantChromeAccessWithoutAnotherWebsiteEntry() {
+        val rules = listOf("gov.in", "ae", "org").map { DomainRule(it, DomainAction.ALLOW, DomainMatchType.SUFFIX, it) }
+        val guard = filter(rules = rules)
+        for (address in listOf("https://traces.tdscpc.gov.in/auth/TracesRegistration/PAORegistration",
+            "https://portal.example.ae/", "https://example.org/")) assertNull(address, guard.block(address))
+        for (address in listOf("https://gov.in.example.com/", "https://notgov.in/", "https://evilorg.com/"))
+            assertEquals(address, ChromeNavigationBlock.WHITELIST, guard.block(address))
+    }
+
+    @Test fun firstDomainMatchStillWinsAndExtraLocksOverrideAnAllow() {
+        val block = DomainRule("block", DomainAction.BLOCK, DomainMatchType.CONTAINS, "manga")
+        val allow = DomainRule("allow", DomainAction.ALLOW, DomainMatchType.SUFFIX, "org")
+        assertEquals(ChromeNavigationBlock.DOMAIN_RULE,
+            filter("manga.org", rules = listOf(block, allow)).block("https://manga.org/"))
+        assertNull(filter(rules = listOf(allow, block)).block("https://manga.org/"))
+        assertEquals(ChromeNavigationBlock.EXTRA_SITE,
+            filter(rules = listOf(allow), extras = setOf("manga.org")).block("https://sub.manga.org/"))
+        assertEquals(ChromeNavigationBlock.DOMAIN_RULE,
+            filter(on = false, rules = listOf(block, allow)).block("https://manga.org/"))
+    }
+
+    @Test fun exactAndContainsApprovalsUseOnlyTheActualHostname() {
+        val exact = DomainRule("exact", DomainAction.ALLOW, DomainMatchType.EXACT, "trusted.example")
+        assertNull(filter(rules = listOf(exact)).block("https://TRUSTED.example:8443/anything"))
+        assertEquals(ChromeNavigationBlock.WHITELIST,
+            filter(rules = listOf(exact)).block("https://sub.trusted.example/"))
+        val contains = exact.copy(type = DomainMatchType.CONTAINS, value = "trusted")
+        assertNull(filter(rules = listOf(contains)).block("https://sub.trusted.example/"))
+        for (address in listOf("https://evil.example/trusted", "https://trusted.example@evil.example/",
+            "https://evil.example/?next=https://trusted.example/"))
+            assertEquals(address, ChromeNavigationBlock.WHITELIST, filter(rules = listOf(contains)).block(address))
+    }
+
+    @Test fun removingDomainApprovalRestoresWhitelistChecksWhileManualEntriesRemain() {
+        val rule = DomainRule("allow", DomainAction.ALLOW, DomainMatchType.SUFFIX, "gov.in")
+        val traces = "https://traces.tdscpc.gov.in/auth/TracesRegistration/PAORegistration"
+        assertNull(filter(rules = listOf(rule)).block(traces))
+        assertEquals(ChromeNavigationBlock.WHITELIST, filter().block(traces))
+        assertNull(filter("tdscpc.gov.in").block(traces))
+    }
 
     @Test fun subscriptionsToHomeOrShortsIsRecheckedWithoutReloading() {
         val guard = filter("m.youtube.com/feed/subscriptions")
@@ -22,6 +64,24 @@ class ChromeNavigationFilterTest {
         assertNull(guard.block("www.youtube.com/"))
         assertEquals(ChromeNavigationBlock.WHITELIST, guard.block("notyoutube.com/feed/subscriptions"))
         assertEquals(ChromeNavigationBlock.WHITELIST, guard.block("youtube.com.evil.example/feed/subscriptions"))
+    }
+
+    @Test fun governmentNamespaceIncludesTracesButNotLookalikesOrExtraLockedAgencies() {
+        val traces = "https://traces.tdscpc.gov.in/auth/TracesRegistration/PAORegistration"
+        val guard = filter("gov.in")
+        assertNull(guard.block(traces))
+        assertEquals(ChromeNavigationBlock.WHITELIST, guard.block("https://notgov.in/auth/"))
+        assertEquals(ChromeNavigationBlock.WHITELIST, guard.block("https://traces.tdscpc.gov.in.evil.example/auth/"))
+        assertEquals(ChromeNavigationBlock.EXTRA_SITE,
+            filter("gov.in", extras = setOf("tdscpc.gov.in")).block(traces))
+    }
+
+    @Test fun embeddedCaptchaExceptionsDoNotApproveStandaloneGoogleDestinations() {
+        val guard = filter("onlineservices.proteantech.in")
+        assertNull(guard.block("https://onlineservices.proteantech.in/paam/ReprintEPan.html"))
+        for (address in listOf("https://www.google.com/search?q=example", "https://www.google.com/recaptcha/api2/anchor?k=example",
+            "https://www.recaptcha.net/recaptcha/api2/bframe", "https://www.gstatic.com/recaptcha/releases/example/recaptcha__en.js"))
+            assertEquals(address, ChromeNavigationBlock.WHITELIST, guard.block(address))
     }
 
     @Test fun directorySlashAndPathCaseArePreserved() {

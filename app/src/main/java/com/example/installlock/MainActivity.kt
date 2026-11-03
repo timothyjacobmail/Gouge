@@ -868,7 +868,7 @@ class MainActivity : AppCompatActivity() {
 
         val info = if (lockOn) {
             val b = Policy.otherBrowsers(this)
-            "Chrome only opens ✓ sites, except those covered by Extra locked sites. " +
+            "Chrome opens ✓ sites and domains approved by the first matching Allow rule. Extra locked sites still apply. " +
                     (if (b.isEmpty()) "No other browsers found." else "Other browsers suspended: ${b.joinToString()}")
         } else {
             "Chrome whitelist is off. Extra locked sites still apply. " +
@@ -901,6 +901,10 @@ class MainActivity : AppCompatActivity() {
         col.addView(button("Extra locked sites") { goTo { showExtraLockedSites() } })
         col.addView(button("Pending tasks") { goTo { showScheduledTasks() } })
         col.addView(lockBtn)
+        val domainAllows = Store.domainRules(this).withIndex().filter { it.value.action == DomainAction.ALLOW }
+        if (domainAllows.isNotEmpty()) col.addView(section("Linked Allow domain rules", "Rule order and extra site locks still apply",
+            *domainAllows.map { label("#${it.index + 1} ${it.value.description}") }.toTypedArray(),
+            button("Manage domain rules") { goTo { showDomainRules() } }))
         col.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         col.addView(add)
         col.addView(refresh)
@@ -1132,8 +1136,9 @@ class MainActivity : AppCompatActivity() {
             label("Browser domain checks use the visible native address bar. The accessibility service must be running. " +
                     "Google app domain checks use the built-in VPN's DNS filter. Cached connections may continue until the next DNS lookup. " +
                     "Browser address-bar support depends on the browser."),
-            label("Allow passes only this domain filter. Chrome whitelist, extra site locks, Google DNS blocklist, " +
-                    "keyword filtering and app locks still apply. Paths and search terms are not domain names."),
+            label("A first matching Allow rule also grants Chrome whitelist access, with no second website approval. " +
+                    "Extra site locks, Google DNS blocklist, keyword filtering and app locks still apply. " +
+                    "Paths and search terms are not domain names."),
             label("Adding Block rules is immediate. Adding Allow rules, removing Block rules, and reordering use their saved password delays. " +
                     "While any rules exist, disabling accessibility locks browsers and Google."),
             label("Accessibility service: " + if (BrowserKeywordService.isReady(this)) "running" else "not running"),

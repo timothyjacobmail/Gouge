@@ -182,14 +182,18 @@ class BrowserKeywordService : AccessibilityService() {
             if (browser == Policy.CHROME) {
                 val address = browserAddress(root, browser, visibleOnly = false)
                 val config = ChromeNavigationConfig(Store.chromeLock(this), Store.activePatterns(this),
-                    Store.extraLockedSites(this).map { it.domain }.toSet())
+                    Store.extraLockedSites(this).map { it.domain }.toSet(), Store.domainRules(this))
                 val blocked = address?.let { chromeNavigationCache.get(config).block(it) }
                 if (address != null && blocked != null) {
                     if (blocked == ChromeNavigationBlock.WHITELIST) {
                         if (!expandChromeCustomTab(root, address)) recoverBlockedSite(address)
                     }
-                    else closeTabOrLeave(root, browser, "This domain is in your extra locked sites")
+                    else closeTabOrLeave(root, browser, if (blocked == ChromeNavigationBlock.EXTRA_SITE)
+                        "This domain is in your extra locked sites" else "This domain is blocked by your ordered domain rules")
                     return
+                }
+                if (address != null && Policy.observeChromeDomain(this, address)) {
+                    Toast.makeText(this, "Domain allowed. Reload this page if Chrome blocked its first load.", Toast.LENGTH_LONG).show()
                 }
             }
             val domainRules = Store.domainRules(this)

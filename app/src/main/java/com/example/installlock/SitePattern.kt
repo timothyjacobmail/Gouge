@@ -8,6 +8,8 @@ internal object SitePattern {
         "^(?:localhost|[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+)(:\\d+)?(/[^\\s|*]*)?$"
     )
     private val suffixLike = setOf("co", "com", "org", "net", "gov", "edu", "ac", "or", "ne", "go")
+    // An intentional approval of India's government namespace includes its agencies.
+    private val allowedSuffixes = setOf("gov.in")
 
     fun isLocalHost(host: String) = host == "localhost" || host == "127.0.0.1"
 
@@ -28,7 +30,8 @@ internal object SitePattern {
         val pattern = host + if (path == "/") "" else path
         if (!site.matches(pattern)) return null
         val labels = host.substringBefore(':').split('.')
-        if (labels.size == 2 && labels[0] in suffixLike && labels[1].length == 2) return null
+        if (labels.size == 2 && labels[0] in suffixLike && labels[1].length == 2 &&
+            labels.joinToString(".") !in allowedSuffixes) return null
         if (':' in host && host.substringAfter(':').toIntOrNull()?.let { it in 1..65535 } != true) return null
         return pattern
     }

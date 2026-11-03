@@ -6,10 +6,11 @@ import java.util.Locale
 internal data class ChromeNavigationConfig(
     val whitelistOn: Boolean,
     val activePatterns: List<String>,
-    val extraLockedDomains: Set<String>
+    val extraLockedDomains: Set<String>,
+    val domainRules: List<DomainRule> = emptyList()
 )
 
-internal enum class ChromeNavigationBlock { WHITELIST, EXTRA_SITE }
+internal enum class ChromeNavigationBlock { WHITELIST, EXTRA_SITE, DOMAIN_RULE }
 
 /** Complements Chrome's load-time policy with checks of the current, committed native URL.
  * No URL history is retained. Paths use Chrome's case-sensitive prefix matching, including
@@ -30,11 +31,15 @@ internal class ChromeNavigationFilter(private val config: ChromeNavigationConfig
         Allowed(host, uri.port.takeIf { it >= 0 }, canonicalPath(uri), uri.rawQuery?.let(::canonicalEscapes))
     }
     private val extras = config.extraLockedDomains.mapNotNull(DomainRules::normalizeHost)
+    private val domains = DomainRules(config.domainRules)
 
     fun block(address: String): ChromeNavigationBlock? {
         val current = parse(address) ?: return null // Browser internal pages and an unreadable URL are not web addresses.
         if (extras.any { current.host == it || current.host.endsWith(".$it") }) return ChromeNavigationBlock.EXTRA_SITE
-        if (config.whitelistOn && allowed.none { it.matches(current) }) return ChromeNavigationBlock.WHITELIST
+        val domainAction = domains.match(current.host)?.rule?.action
+        if (domainAction == DomainAction.BLOCK) return ChromeNavigationBlock.DOMAIN_RULE
+        if (config.whitelistOn && domainAction != DomainAction.ALLOW && allowed.none { it.matches(current) })
+            return ChromeNavigationBlock.WHITELIST
         return null
     }
 

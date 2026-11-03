@@ -47,7 +47,7 @@ class ExtraSiteLocksTest {
     @Test fun domainLocksOverrideSameDomainPathsPortsAndSubdomainsInWhitelist() {
         val locks = ExtraSiteLocks(setOf("example.com"))
         assertEquals(listOf("other.com", "notexample.com", "example.com.evil.org"),
-            locks.allowedPatterns(listOf("example.com", "example.com/path", "example.com:443/path",
+            locks.allowedPatterns(listOf("example.com", ".example.com", ".sub.example.com", "example.com/path", "example.com:443/path",
                 "sub.example.com", "deep.sub.example.com/path", "other.com", "notexample.com", "example.com.evil.org")))
     }
 

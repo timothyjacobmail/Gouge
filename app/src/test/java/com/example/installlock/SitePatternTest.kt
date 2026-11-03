@@ -29,6 +29,14 @@ class SitePatternTest {
         }
     }
 
+    @Test fun acceptsAnExplicitGovernmentNamespaceApproval() {
+        assertEquals("gov.in", SitePattern.normalizeForEntry(" HTTPS://WWW.GOV.IN/ "))
+        assertEquals("gov.in:443/auth/", SitePattern.normalize("gov.in:443/auth/"))
+        assertEquals(listOf("gov.in"), SharedSite.whitelistOptions("https://gov.in/"))
+        for (text in listOf("co.in", "com.in", "org.in", "*.gov.in", "gov.in|example.com"))
+            assertNull(text, SitePattern.normalize(text))
+    }
+
     @Test fun allSuggestedChoicesCanBeSavedWithoutChangingTheirScope() {
         for (text in listOf("https://reddit.com/r/sharks/posts", "https://www.example.com/Read/Post/",
             "https://example.com:8443/A%2Fb/Page?tracking=private", "http://localhost:40715/callback?state=example-state&code=example-code")) {

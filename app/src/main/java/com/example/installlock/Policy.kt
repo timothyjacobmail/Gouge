@@ -257,6 +257,28 @@ object Policy {
             .toSet()
     }
 
+    // Contains approvals remember only verified hostnames for this process lifetime.
+    // Every policy refresh rechecks them against the current ordered rules.
+    private val observedChromeAllows = linkedSetOf<String>()
+
+    internal fun observeChromeDomain(c: Context, address: String): Boolean {
+        if (!Store.chromeLock(c)) return false
+        val rules = Store.domainRules(c)
+        if (rules.none { it.action == DomainAction.ALLOW && it.type == DomainMatchType.CONTAINS }) return false
+        val host = DomainRules.hostFromAddress(address) ?: return false
+        if (!ChromeDomainApprovals(rules).needsObservedHost(host) || !isOwner(c)) return false
+        val extras = Store.extraLockedSites(c).map { it.domain }.toSet()
+        // Existing site approvals already permit the request. Extra locks take precedence.
+        val config = ChromeNavigationConfig(true, Store.activePatterns(c), extras)
+        if (ChromeNavigationFilter(config).block(address) != ChromeNavigationBlock.WHITELIST) return false
+        synchronized(observedChromeAllows) {
+            if (!observedChromeAllows.add(host)) return false
+            if (observedChromeAllows.size > 256) observedChromeAllows.remove(observedChromeAllows.first())
+        }
+        syncChrome(c)
+        return true
+    }
+
     /** Reconcile with Android's actual restrictions; a saved "sent" flag can become stale. */
     fun syncChrome(c: Context, force: Boolean = false) {
         if (!isOwner(c)) return
@@ -265,7 +287,8 @@ object Policy {
             val owner = admin(c)
             val current = manager.getApplicationRestrictions(owner, CHROME)
             val updated = ChromeRestrictions.update(current, Store.chromeLock(c), Store.activePatterns(c),
-                Store.extraLockedSites(c).map { it.domain })
+                Store.extraLockedSites(c).map { it.domain }, Store.domainRules(c),
+                synchronized(observedChromeAllows) { observedChromeAllows.toSet() })
             if (updated == null && !force) return
             manager.setApplicationRestrictions(owner, CHROME, updated ?: Bundle(current))
             if (RESTART_CHROME_ON_CHANGE) bounceChrome(c)

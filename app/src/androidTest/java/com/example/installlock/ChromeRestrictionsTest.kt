@@ -9,6 +9,18 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ChromeRestrictionsTest {
+    private val captchaResources = listOf(
+        "https://.www.google.com/recaptcha/",
+        "https://.recaptcha.google.com/recaptcha/",
+        "https://.www.recaptcha.net/recaptcha/",
+        "https://.www.gstatic.com/recaptcha/"
+    )
+
+    private fun allowed(restrictions: Bundle): List<String> =
+        JSONArray(restrictions.getString("URLAllowlist")).let { array ->
+            (0 until array.length()).map { array.getString(it) }
+        }
+
     @Test
     fun sharedPathChoiceReachesChromeWithItsCaseAndTrailingSlashIntact() {
         val choices = SharedSite.whitelistOptions("https://www.example.com/Topics/Sharks/Post?tracking=private")
@@ -49,7 +61,7 @@ class ChromeRestrictionsTest {
             putBoolean("ForceGoogleSafeSearch", true)
         }
         val migrated = ChromeRestrictions.update(old, true, listOf("example.com"))!!
-        assertEquals("[\"example.com\"]", migrated.getString("URLAllowlist"))
+        assertEquals((listOf("example.com") + captchaResources).sorted(), allowed(migrated))
         assertTrue(migrated.getBoolean("ForceGoogleSafeSearch"))
         val off = ChromeRestrictions.update(migrated, false, emptyList())!!
         assertFalse(off.containsKey("URLBlocklist"))
@@ -81,10 +93,76 @@ class ChromeRestrictionsTest {
         val whitelist = listOf("example.com", "sub.example.com/path", "other.com")
         val blocked = ChromeRestrictions.update(Bundle(), true, whitelist, listOf("example.com"))!!
         assertEquals("[\"*\",\"example.com\"]", blocked.getString("URLBlocklist"))
-        assertEquals("[\"other.com\"]", blocked.getString("URLAllowlist"))
+        assertEquals((listOf("other.com") + captchaResources).sorted(), allowed(blocked))
         val removed = ChromeRestrictions.update(blocked, true, whitelist, emptyList())!!
-        assertEquals(whitelist.sorted(), JSONArray(removed.getString("URLAllowlist")).let { array ->
-            (0 until array.length()).map { array.getString(it) }
-        })
+        assertEquals((whitelist + captchaResources).sorted(), allowed(removed))
+    }
+
+    @Test
+    fun governmentNamespaceCanBeSavedAndSentToChrome() {
+        val government = Store.normalizeSite("https://gov.in/")!!
+        val policy = ChromeRestrictions.update(Bundle(), true, listOf(government))!!
+        assertTrue(allowed(policy).contains("gov.in"))
+        assertNull(ChromeNavigationFilter(ChromeNavigationConfig(true, listOf(government), emptySet()))
+            .block("https://traces.tdscpc.gov.in/auth/TracesRegistration/PAORegistration"))
+    }
+
+    @Test
+    fun captchaResourcesAreAddedForAnApprovedPageWithExactHttpsHostsAndPaths() {
+        val policy = ChromeRestrictions.update(Bundle(), true, listOf("onlineservices.proteantech.in"))!!
+        assertEquals((listOf("onlineservices.proteantech.in") + captchaResources).sorted(), allowed(policy))
+        assertNull(ChromeRestrictions.update(policy, true, listOf("onlineservices.proteantech.in")))
+        val removed = ChromeRestrictions.update(policy, true, emptyList())!!
+        assertTrue(allowed(removed).isEmpty())
+    }
+
+    @Test
+    fun captchaResourcesNeverOverrideExtraDomainLocks() {
+        val blocked = ChromeRestrictions.update(Bundle(), true, listOf("onlineservices.proteantech.in"),
+            listOf("google.com", "recaptcha.net", "gstatic.com"))!!
+        assertEquals(listOf("onlineservices.proteantech.in"), allowed(blocked))
+
+        val oneHostBlocked = ChromeRestrictions.update(Bundle(), true, listOf("onlineservices.proteantech.in"),
+            listOf("www.google.com"))!!
+        assertEquals((listOf("onlineservices.proteantech.in") +
+            captchaResources.filterNot { it == "https://.www.google.com/recaptcha/" }).sorted(), allowed(oneHostBlocked))
+
+        val approvedPageBlocked = ChromeRestrictions.update(Bundle(), true, listOf("onlineservices.proteantech.in"),
+            listOf("proteantech.in"))!!
+        assertTrue(allowed(approvedPageBlocked).isEmpty())
+    }
+
+    @Test
+    fun domainAllowsProduceSuffixAndExactPolicyEntriesWithCaptchaSupport() {
+        val rules = listOf(DomainRule("gov", DomainAction.ALLOW, DomainMatchType.SUFFIX, "gov.in"),
+            DomainRule("exact", DomainAction.ALLOW, DomainMatchType.EXACT, "account.example.com"))
+        val policy = ChromeRestrictions.update(Bundle(), true, emptyList(), domainRules = rules)!!
+        assertEquals((listOf("gov.in", ".account.example.com") + captchaResources).sorted(), allowed(policy))
+        assertNull(ChromeRestrictions.update(policy, true, emptyList(), domainRules = rules))
+        val revoked = ChromeRestrictions.update(policy, true, emptyList())!!
+        assertTrue(allowed(revoked).isEmpty())
+    }
+
+    @Test
+    fun extraLocksRemoveExactAndSuffixDomainApprovals() {
+        val rules = listOf(DomainRule("suffix", DomainAction.ALLOW, DomainMatchType.SUFFIX, "example.com"),
+            DomainRule("exact", DomainAction.ALLOW, DomainMatchType.EXACT, "account.example.com"))
+        val blocked = ChromeRestrictions.update(Bundle(), true, emptyList(), listOf("example.com"), rules)!!
+        assertTrue(allowed(blocked).isEmpty())
+    }
+
+    @Test
+    fun containsRuleOnlyPermitsVerifiedObservedHostsAndRevokesThemWithTheRule() {
+        val rules = listOf(DomainRule("contains", DomainAction.ALLOW, DomainMatchType.CONTAINS, "trusted"))
+        val initial = ChromeRestrictions.update(Bundle(), true, emptyList(), domainRules = rules)!!
+        assertTrue(allowed(initial).isEmpty())
+        val observed = ChromeRestrictions.update(initial, true, emptyList(), domainRules = rules,
+            observedAllowedHosts = setOf("trusted.example", "evil.example"))!!
+        assertEquals((listOf(".trusted.example") + captchaResources).sorted(), allowed(observed))
+        val blocked = ChromeRestrictions.update(observed, true, emptyList(), listOf("trusted.example"), rules,
+            setOf("trusted.example"))!!
+        assertTrue(allowed(blocked).isEmpty())
+        val revoked = ChromeRestrictions.update(observed, true, emptyList(), observedAllowedHosts = setOf("trusted.example"))!!
+        assertTrue(allowed(revoked).isEmpty())
     }
 }

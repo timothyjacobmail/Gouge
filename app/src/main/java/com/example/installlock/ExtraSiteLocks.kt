@@ -29,7 +29,7 @@ internal data class ExtraSiteLocks(
      * A parent-domain allow entry can stay: the blocked subdomain has the longer host match.
      * See https://www.chromium.org/administrators/url-blocklist-filter-format/ . */
     fun allowedPatterns(patterns: List<String>): List<String> = patterns.filterNot { pattern ->
-        val host = pattern.substringBefore('/').substringBefore(':').lowercase()
+        val host = pattern.substringBefore('/').substringBefore(':').lowercase().removePrefix(".")
         domains.any { host == it || host.endsWith(".$it") }
     }
 }

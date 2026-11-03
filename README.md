@@ -9,6 +9,8 @@ This Android project builds two independent apps:
 
 `secretvault` is the Delayed Secrets library embedded in Install Lock. Arise O Sleeper! has no dependency on either module and opens directly to its verse alarm screen, with its own launcher icon and private storage.
 
+The [Chrome whitelist](docs/chrome-whitelist.md) also honors ordered domain Allow rules and supports embedded reCAPTCHA on approved websites.
+
 Build both debug APKs on Windows with Java 21 and the Android SDK configured in `local.properties`:
 
 ```powershell
