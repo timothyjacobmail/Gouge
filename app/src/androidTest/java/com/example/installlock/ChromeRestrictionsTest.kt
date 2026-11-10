@@ -9,6 +9,14 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ChromeRestrictionsTest {
+    @Test fun judgeNeverGrantsLeisureOrSubdomainWildcardsAndHonorsExtraLocks() {
+        val policy = ChromeRestrictions.update(Bundle(), true, emptyList(), judgeHosts = setOf("www.edcad.ae", "youtube.com", "unknown.example"))!!
+        assertTrue(allowed(policy).contains("https://.www.edcad.ae:443/"))
+        assertFalse(allowed(policy).any { it.contains("youtube") || it.contains("unknown.example") })
+        val blocked = ChromeRestrictions.update(policy, true, emptyList(), extraLockedDomains = listOf("edcad.ae"),
+            judgeHosts = setOf("www.edcad.ae"))!!
+        assertFalse(allowed(blocked).any { it.contains("edcad") })
+    }
     private val captchaResources = listOf(
         "https://.www.google.com/recaptcha/",
         "https://.recaptcha.google.com/recaptcha/",

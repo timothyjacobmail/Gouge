@@ -288,7 +288,7 @@ object Policy {
             val current = manager.getApplicationRestrictions(owner, CHROME)
             val updated = ChromeRestrictions.update(current, Store.chromeLock(c), Store.activePatterns(c),
                 Store.extraLockedSites(c).map { it.domain }, Store.domainRules(c),
-                synchronized(observedChromeAllows) { observedChromeAllows.toSet() })
+                synchronized(observedChromeAllows) { observedChromeAllows.toSet() }, JudgeStore.active(c))
             if (updated == null && !force) return
             manager.setApplicationRestrictions(owner, CHROME, updated ?: Bundle(current))
             if (RESTART_CHROME_ON_CHANGE) bounceChrome(c)

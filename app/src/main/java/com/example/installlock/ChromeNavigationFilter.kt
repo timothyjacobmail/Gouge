@@ -7,7 +7,8 @@ internal data class ChromeNavigationConfig(
     val whitelistOn: Boolean,
     val activePatterns: List<String>,
     val extraLockedDomains: Set<String>,
-    val domainRules: List<DomainRule> = emptyList()
+    val domainRules: List<DomainRule> = emptyList(),
+    val judgeHosts: Set<String> = emptySet()
 )
 
 internal enum class ChromeNavigationBlock { WHITELIST, EXTRA_SITE, DOMAIN_RULE }
@@ -16,7 +17,7 @@ internal enum class ChromeNavigationBlock { WHITELIST, EXTRA_SITE, DOMAIN_RULE }
  * No URL history is retained. Paths use Chrome's case-sensitive prefix matching, including
  * a directory's trailing slash; a host entry includes its subdomains. */
 internal class ChromeNavigationFilter(private val config: ChromeNavigationConfig) {
-    private data class Address(val host: String, val port: Int, val path: String, val query: String?)
+    private data class Address(val host: String, val port: Int, val path: String, val query: String?, val scheme: String)
     private data class Allowed(val host: String, val port: Int?, val path: String, val query: String?) {
         fun matches(address: Address): Boolean =
             (address.host == host || address.host.endsWith(".$host")) &&
@@ -32,13 +33,15 @@ internal class ChromeNavigationFilter(private val config: ChromeNavigationConfig
     }
     private val extras = config.extraLockedDomains.mapNotNull(DomainRules::normalizeHost)
     private val domains = DomainRules(config.domainRules)
+    private val judged = JudgeRules.activeHosts(config.judgeHosts, config.extraLockedDomains, config.domainRules)
 
     fun block(address: String): ChromeNavigationBlock? {
         val current = parse(address) ?: return null // Browser internal pages and an unreadable URL are not web addresses.
         if (extras.any { current.host == it || current.host.endsWith(".$it") }) return ChromeNavigationBlock.EXTRA_SITE
         val domainAction = domains.match(current.host)?.rule?.action
         if (domainAction == DomainAction.BLOCK) return ChromeNavigationBlock.DOMAIN_RULE
-        if (config.whitelistOn && domainAction != DomainAction.ALLOW && allowed.none { it.matches(current) })
+        val judgeAllows = current.host in judged && current.scheme == "https" && current.port == 443 && !JudgeRules.unsafeRoute(address)
+        if (config.whitelistOn && domainAction != DomainAction.ALLOW && !judgeAllows && allowed.none { it.matches(current) })
             return ChromeNavigationBlock.WHITELIST
         return null
     }
@@ -75,7 +78,7 @@ internal class ChromeNavigationFilter(private val config: ChromeNavigationConfig
             val host = DomainRules.hostFromAddress(address) ?: return null
             val uri = uri(address.trim()) ?: return null
             return Address(host, uri.port.takeIf { it >= 0 } ?: if (uri.scheme.equals("http", ignoreCase = true)) 80 else 443,
-                canonicalPath(uri), uri.rawQuery?.let(::canonicalEscapes))
+                canonicalPath(uri), uri.rawQuery?.let(::canonicalEscapes), uri.scheme.lowercase(Locale.ROOT))
         }
 
         private fun queryMatches(required: String?, actual: String?): Boolean {

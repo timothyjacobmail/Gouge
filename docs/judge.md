@@ -1,0 +1,22 @@
+# Judge
+
+Open **Browser & Google → Judge**, **Chrome whitelist → Judge a website**, or **Judge this website** on Chrome's blocked-page screen. Enter the HTTPS address and tap **Judge this website**. No normal whitelist password, saved approval time, or pending task is changed by a rejected judgement.
+
+Judge is deliberately conservative. A website's own text cannot establish that it is safe for immediate access: a leisure site can call itself educational, and an unfamiliar site can copy a legitimate business page. No program can promise perfect classification of every website, future page, embedded resource, or changing domain. This implementation therefore does **not** grant immediate access to arbitrary sites that merely appear productive.
+
+## Decision rules
+
+- Known social, video, anime, manga, gaming, movie and entertainment platforms keep their normal delay. YouTube, Reddit, Instagram, Facebook, X/Twitter, MangaDex, Weeb Central, DeviantArt and Chess.com are explicit denials, including their subdomains and educational pages. The existing offline manga catalog also vetoes immediate access. Unknown alternative domains remain ineligible even if absent from those lists.
+- Judge follows at most five public HTTPS destinations, rejects credentials and unusual ports, checks each redirect for leisure destinations, and reads at most 512 KiB of HTML. It executes no JavaScript and sends no browser cookies, login credentials, forms, or page text to an AI provider. Public-IP checks reject private/local network destinations. The website receives an ordinary public-page request from the phone.
+- Readable content must confirm the reviewed service's identity and purpose. Leisure or mixed-purpose content, login-only pages, anti-bot challenges, TLS/network failures, oversized/non-HTML responses, redirect loops, and ambiguous results retain the existing delay. Page text containing instructions to ignore the rules has no authority.
+- The initial reviewed service is **Emirates Driving Company**. Only `edcad.ae`, `www.edcad.ae`, `pay.edcad.ae`, and `elearning.edcad.ae` are candidates. These hosts were independently checked against the company's public website and its service links. Each host must pass its own content check; arbitrary EDC subdomains are not included. Expanding this list requires a reviewed app update, not a user-entered claim or a website response.
+
+The independently checked website is [Emirates Driving Company](https://www.edcad.ae/en), which describes driving-license registration, theory and practical training, and links its student and e-learning services. On the development machine the live origin returned HTTP 403 to automated requests; that response correctly receives no immediate approval. The phone's network may receive a different response, but Judge never converts a fetch failure into approval.
+
+## Enforcement
+
+A positive judgement saves a **separate, exact-host HTTPS approval**. Chrome receives an exact-host, HTTPS, port-443 managed allowlist entry; the app's native URL filter uses the same host restriction and excludes leisure/redirect routes. Judge never adds a broad suffix, approves related subdomains, modifies ordered domain rules, or sets a normal whitelist entry's wait to zero. Intermediate redirect hosts and external links receive no approval. External leisure frames/resources remain subject to Chrome's managed blocklist and the existing narrow CAPTCHA exceptions.
+
+Browser accessibility and device-owner setup must be active to grant access. Judge approvals are inactive when browser monitoring is disconnected (including banking mode). Extra site locks, ordered Block rules, app locks, curfew, keywords and watchdog rules still apply. Approvals are revalidated against the bundled reviewed-host catalog whenever policy is refreshed, including after restart or an app update. Removing an approval from the Judge screen reapplies Chrome policy. Chrome policy reconciliation follows the existing service's policy refresh interval.
+
+This verifies a reviewed **service host**, not every future byte it might serve. Domain compromise, changed site purpose, third-party content, manufacturer behavior or a disconnected enforcement service cannot be guaranteed away. Judge's interface exposes its limited reviewed coverage instead of presenting heuristic guesses as foolproof decisions. Useful but unreviewed sites must still use the ordinary delayed whitelist.

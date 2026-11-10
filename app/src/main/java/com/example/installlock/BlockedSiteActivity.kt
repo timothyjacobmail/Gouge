@@ -80,6 +80,9 @@ class BlockedSiteActivity : AppCompatActivity() {
                         "If only the domain appears, enter or paste the full path above. " +
                         "Choose a path or the whole domain on the next screen. " +
                         "The usual whitelist password and waiting period still apply. Other locks also remain active."),
+                UiStyle.button(this@BlockedSiteActivity, "Judge this website") {
+                    startActivity(JudgeActivity.openIntent(this@BlockedSiteActivity, address.text.toString()))
+                },
                 UiStyle.button(this@BlockedSiteActivity, "Whitelist this site", primary = true) {
                     val selected = address.text.toString()
                     if (requestSite(selected).isEmpty()) {

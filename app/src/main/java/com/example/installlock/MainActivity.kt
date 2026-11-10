@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun browserActions() = section("Browser & Google", "Website rules, keyword filtering and Google VPN",
+        button("Judge") { startActivity(JudgeActivity.openIntent(this)) },
         button("Ordered domain rules") { goTo { showDomainRules() } },
         button("Chrome whitelist") { goTo { showChromeSites() } },
         button("Extra locked sites") { goTo { showExtraLockedSites() } },
@@ -606,6 +607,7 @@ class MainActivity : AppCompatActivity() {
         add(SearchDestination("Prevent uninstall & force stop", "apps uninstall protection remove force stop clear data") { showNoUninstallPicker() })
         add(SearchDestination("Ordered domain rules", "browser website block allow reorder move domain") { showDomainRules() })
         add(SearchDestination("Chrome whitelist", "browser website site whitelist password delay turn off on") { showChromeSites() })
+        add(SearchDestination("Judge", "website classify immediate leisure content") { startActivity(JudgeActivity.openIntent(this@MainActivity)) })
         add(SearchDestination("Add a whitelist site", "chrome browser website allow add whitelist") { showAddSite() })
         add(SearchDestination("Extra locked sites", "browser chrome website block remove") { showExtraLockedSites() })
         add(SearchDestination("Browser & Google keyword filter", "words blocked filtering keywords turn off on") { showBrowserKeywords() })
@@ -898,6 +900,7 @@ class MainActivity : AppCompatActivity() {
         col.orientation = LinearLayout.VERTICAL
         col.setPadding(dp(16), dp(16), dp(16), dp(16))
         col.addView(label("Chrome whitelist", 22f))
+        col.addView(button("Judge a website") { startActivity(JudgeActivity.openIntent(this)) })
         col.addView(label(info))
         col.addView(label("Path checks stay active when a site changes pages without reloading. Keep Install Lock's accessibility service connected."))
         col.addView(button("Extra locked sites") { goTo { showExtraLockedSites() } })
