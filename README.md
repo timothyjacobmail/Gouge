@@ -14,7 +14,7 @@ Requires Android 11 or later. This installs the debug version of Install Lock as
 4. Follow the Wi-Fi prompts, scan the QR code, and accept the device-management setup.
 5. Finish Android setup and open Install Lock to enable its feature permissions.
 
-[Download the debug APK and read the full setup instructions](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7-debug-20261110). The optional permission for automatic accessibility-guard maintenance still needs the one-time ADB command in those instructions. Complete factory-reset enrollment has not yet been tested on a physical phone.
+[Download the debug APK and read the full setup instructions](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.1-debug-20261110). The optional permission for automatic accessibility-guard maintenance still needs the one-time ADB command in those instructions. Complete factory-reset enrollment has not yet been tested on a physical phone.
 
 ## Judge
 
@@ -22,7 +22,7 @@ Open **Browser & Google → Judge** to inspect a public website. Known leisure p
 
 ## App updates
 
-Install [version 1.7](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7-debug-20261110) once to get the updater. Then open **Settings & passwords → App updates** to check for newer GitHub releases and download and install them. Existing settings and device-owner setup are preserved. See [app update instructions](docs/app-updates.md).
+Install [version 1.7.1](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.1-debug-20261110) once to get the updater. Then open **Settings & passwords → App updates** to check for newer GitHub releases and download and install them. Existing settings and device-owner setup are preserved. See [app update instructions](docs/app-updates.md).
 
 The [Chrome whitelist](docs/chrome-whitelist.md) also honors ordered domain Allow rules and supports embedded reCAPTCHA on approved websites.
 

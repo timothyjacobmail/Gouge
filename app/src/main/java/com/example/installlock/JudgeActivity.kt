@@ -69,7 +69,8 @@ class JudgeActivity : AppCompatActivity() {
                             }
                             renderGrants()
                         } else {
-                            result.text = "Immediate access was not granted. Device-owner setup and browser accessibility must be active, banking mode must be off, and extra site locks and Block rules take priority."
+                            result.text = "Immediate access was not granted. " + (JudgeStore.rejectionReason(this, judgement)
+                                ?: "The approval could not be saved. Please try again.")
                         }
                     }
                 }

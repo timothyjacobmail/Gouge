@@ -26,6 +26,9 @@ import com.example.delayedsecrect.PasswordEntryResult
 /** Reads browser pages and visible Google app content locally; never saves the inspected text. */
 @Suppress("DEPRECATION")
 class BrowserKeywordService : AccessibilityService() {
+    override fun dump(fd: java.io.FileDescriptor, writer: java.io.PrintWriter, args: Array<out String>) {
+        writer.println("Browser monitor connected=${connections.connected} current=${connections.owns(this)} enabled=${isEnabled(this)}")
+    }
     private val handler = Handler(Looper.getMainLooper())
     private var targets = setOf(Policy.CHROME, BrowserPackages.GOOGLE_APP)
     private var scanScheduled = false
@@ -85,7 +88,7 @@ class BrowserKeywordService : AccessibilityService() {
             else registerReceiver(packageReceiver, filter)
             registered = true
         }
-        connected = true
+        connections.connect(this)
         PasswordFieldEntry.attach(::enterFocusedPassword)
         SecretClipboard.attachAccessibility(this, ::updateEventPackages) {
             startActivity(ClipboardCleanupActivity.openIntent(this))
@@ -513,9 +516,10 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        connected = false
-        PasswordFieldEntry.detach()
-        SecretClipboard.detachAccessibility()
+        if (connections.disconnect(this)) {
+            PasswordFieldEntry.detach()
+            SecretClipboard.detachAccessibility()
+        }
         onInterrupt()
         prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         if (registered) unregisterReceiver(packageReceiver)
@@ -524,28 +528,40 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        connected = false
-        PasswordFieldEntry.detach()
-        SecretClipboard.detachAccessibility()
+        if (connections.disconnect(this)) {
+            PasswordFieldEntry.detach()
+            SecretClipboard.detachAccessibility()
+        }
         onInterrupt()
         Policy.sweep(this)
         return super.onUnbind(intent)
     }
 
     companion object {
-        @Volatile private var connected = false
+        private val connections = ServiceConnectionState()
         // One query in memory only, so query echoes can be recognized even when Google's
         // current version doesn't expose a native query control. No search history is saved.
         @Volatile private var lastSubmittedGoogleQuery: String? = null
 
         internal fun rememberGoogleSearch(query: String) { lastSubmittedGoogleQuery = query }
 
-        fun isReady(context: Context): Boolean = connected && isEnabled(context)
+        fun isReady(context: Context): Boolean = connections.connected && isEnabled(context)
 
-        fun isEnabled(context: Context): Boolean =
-            context.getSystemService(AccessibilityManager::class.java)
-                .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-                .any { it.resolveInfo.serviceInfo.name == BrowserKeywordService::class.java.name &&
-                    it.resolveInfo.serviceInfo.packageName == context.packageName }
+        fun isEnabled(context: Context): Boolean {
+            val wanted = android.content.ComponentName(context, BrowserKeywordService::class.java)
+            // Some OEMs return an incomplete enabled-service list to the app even while
+            // this exact service is enabled and bound. Component matching also handles
+            // Android's abbreviated package/.Service form without substring matches.
+            return try {
+                android.provider.Settings.Secure.getString(context.contentResolver,
+                    android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                    .split(':').mapNotNull(android.content.ComponentName::unflattenFromString).any { it == wanted }
+            } catch (_: SecurityException) {
+                context.getSystemService(AccessibilityManager::class.java)
+                    .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                    .any { android.content.ComponentName(it.resolveInfo.serviceInfo.packageName,
+                        it.resolveInfo.serviceInfo.name) == wanted }
+            }
+        }
     }
 }
