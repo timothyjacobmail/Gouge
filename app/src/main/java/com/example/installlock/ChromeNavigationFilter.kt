@@ -8,7 +8,8 @@ internal data class ChromeNavigationConfig(
     val activePatterns: List<String>,
     val extraLockedDomains: Set<String>,
     val domainRules: List<DomainRule> = emptyList(),
-    val judgeHosts: Set<String> = emptySet()
+    val judgeHosts: Set<String> = emptySet(),
+    val judgeEligibleHosts: Set<String> = JudgeRules.reviewedHosts
 )
 
 internal enum class ChromeNavigationBlock { WHITELIST, EXTRA_SITE, DOMAIN_RULE }
@@ -33,7 +34,7 @@ internal class ChromeNavigationFilter(private val config: ChromeNavigationConfig
     }
     private val extras = config.extraLockedDomains.mapNotNull(DomainRules::normalizeHost)
     private val domains = DomainRules(config.domainRules)
-    private val judged = JudgeRules.activeHosts(config.judgeHosts, config.extraLockedDomains, config.domainRules)
+    private val judged = JudgeRules.activeHosts(config.judgeHosts, config.extraLockedDomains, config.domainRules, config.judgeEligibleHosts)
 
     fun block(address: String): ChromeNavigationBlock? {
         val current = parse(address) ?: return null // Browser internal pages and an unreadable URL are not web addresses.

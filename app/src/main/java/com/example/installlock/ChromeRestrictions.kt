@@ -21,7 +21,8 @@ internal object ChromeRestrictions {
     @Suppress("DEPRECATION")
     fun update(current: Bundle, lockOn: Boolean, activePatterns: List<String>,
                extraLockedDomains: List<String> = emptyList(), domainRules: List<DomainRule> = emptyList(),
-               observedAllowedHosts: Set<String> = emptySet(), judgeHosts: Set<String> = emptySet()): Bundle? {
+               observedAllowedHosts: Set<String> = emptySet(), judgeHosts: Set<String> = emptySet(),
+               judgeEligibleHosts: Set<String> = JudgeRules.reviewedHosts): Bundle? {
         if (!lockOn && extraLockedDomains.isEmpty()) {
             if (!current.containsKey(BLOCKLIST) && !current.containsKey(ALLOWLIST)) return null
             return Bundle(current).apply {
@@ -33,7 +34,7 @@ internal object ChromeRestrictions {
         // Chrome's Android managed configuration declares these lists as JSON strings.
         val extras = ExtraSiteLocks(extraLockedDomains.toSet())
         val blocked = JSONArray((if (lockOn) listOf("*") else emptyList()) + extras.domains.sorted()).toString()
-        val judged = JudgeRules.activeHosts(judgeHosts, extraLockedDomains.toSet(), domainRules)
+        val judged = JudgeRules.activeHosts(judgeHosts, extraLockedDomains.toSet(), domainRules, judgeEligibleHosts)
             .map { "https://.$it:443/" }
         val websites = extras.allowedPatterns(activePatterns + ChromeDomainApprovals(domainRules).policyPatterns(observedAllowedHosts)) + judged
         val resources = if (websites.isEmpty()) emptyList() else

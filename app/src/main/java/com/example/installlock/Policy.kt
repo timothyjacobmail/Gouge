@@ -282,13 +282,14 @@ object Policy {
     /** Reconcile with Android's actual restrictions; a saved "sent" flag can become stale. */
     fun syncChrome(c: Context, force: Boolean = false) {
         if (!isOwner(c)) return
+        JudgeStore.refreshStale(c)
         try {
             val manager = dpm(c)
             val owner = admin(c)
             val current = manager.getApplicationRestrictions(owner, CHROME)
             val updated = ChromeRestrictions.update(current, Store.chromeLock(c), Store.activePatterns(c),
                 Store.extraLockedSites(c).map { it.domain }, Store.domainRules(c),
-                synchronized(observedChromeAllows) { observedChromeAllows.toSet() }, JudgeStore.active(c))
+                synchronized(observedChromeAllows) { observedChromeAllows.toSet() }, JudgeStore.active(c), JudgeStore.eligible(c))
             if (updated == null && !force) return
             manager.setApplicationRestrictions(owner, CHROME, updated ?: Bundle(current))
             if (RESTART_CHROME_ON_CHANGE) bounceChrome(c)

@@ -8,7 +8,8 @@ import java.util.Locale
 
 /** Fetches inert public HTML: no JavaScript, cookies, credentials, forms or WebView. */
 internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
-                            private val leisureCatalog: Set<String> = emptySet()) {
+                            private val leisureCatalog: Set<String> = emptySet(),
+                            private val preferences: JudgePreferences = JudgePreferences()) {
     data class Page(val status: Int, val html: String = "", val redirect: String? = null)
 
     fun judge(input: String): Judgement {
@@ -19,6 +20,7 @@ internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
         repeat(5) {
             if (JudgeRules.leisureHost(current.host, leisureCatalog) || JudgeRules.unsafeRoute(current.toASCIIString()))
                 return Judgement(JudgeDecision.DELAY, "This leisure site or redirect route must use the normal whitelist delay.")
+            preferences.veto(current.toASCIIString())?.let { return Judgement(JudgeDecision.DELAY, it) }
             if (!visited.add(current.toASCIIString()) || Thread.currentThread().isInterrupted || System.nanoTime() > deadline)
                 return Judgement(JudgeDecision.UNVERIFIED, "The website could not be verified. Its delay is unchanged.")
             val page = try { fetch(current) } catch (_: Exception) {
@@ -30,7 +32,7 @@ internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
                         ?: return Judgement(JudgeDecision.UNVERIFIED, "The redirect destination is not eligible for immediate access.")
                 }
                 page.status == 200 -> {
-                    val decision = JudgeRules.inspect(current.toASCIIString(), page.html)
+                    val decision = JudgeRules.inspect(current.toASCIIString(), page.html, preferences)
                     // Only grant the final inspected host, never a shortener or intermediate host.
                     return decision
                 }

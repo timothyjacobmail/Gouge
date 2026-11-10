@@ -8,7 +8,7 @@ Install Lock is an Android self-control app that uses **device-owner management*
 
 ## Installation
 
-Requires **Android 11 or later**. Download the current debug APK from [version 1.7.3](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.3-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
+Requires **Android 11 or later**. Download the current debug APK from [version 1.8](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.8-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
 
 ### Without resetting: a computer and USB debugging
 
@@ -202,7 +202,7 @@ Approved communities generate linked Chrome path permissions with no second wait
 
 Open **Judge** from Browser & Google, the Chrome whitelist, or a blocked Chrome page. Enter a public HTTPS URL and tap **Judge this website**. It checks redirects, readable HTML, and outgoing links without executing JavaScript or sending page text to an AI provider.
 
-**Reviewed services eligible for immediate approval:**
+**Bundled reviewed services eligible for immediate approval:**
 
 | Service | Eligible hosts |
 | --- | --- |
@@ -210,9 +210,11 @@ Open **Judge** from Browser & Google, the Chrome whitelist, or a blocked Chrome 
 | iLovePDF document tools | `ilovepdf.com`, `www.ilovepdf.com` |
 | Adhoc Safety fire/security services | `adhocsafety.com`, `www.adhocsafety.com` |
 
-Each host must pass its own content check for that service's identity and purpose. A positive result grants separate exact-host HTTPS access; it does not grant arbitrary subdomains or follow-on links.
+Each host must pass its own content check for that service's identity and purpose and your current personal block rules. A positive result grants separate exact-host HTTPS access; it does not grant arbitrary subdomains or follow-on links.
 
-Known leisure platforms—including YouTube, Reddit, Instagram, Facebook, X/Twitter, MangaDex, Weeb Central, DeviantArt, and Chess.com—cannot receive Judge approvals, even for educational-looking pages. Unknown, mixed-purpose, login-only, unreadable, or anti-bot-blocked pages keep the normal delay. Useful but unreviewed sites must still use the delayed whitelist.
+Known leisure platforms—including YouTube, Reddit, Instagram, Facebook, X/Twitter, MangaDex, Weeb Central, DeviantArt, and Chess.com—cannot receive Judge approvals, even for educational-looking pages. Unknown, mixed-purpose, login-only, unreadable, or anti-bot-blocked pages keep the normal delay. Other sites can also qualify from your completed whole-site whitelist, but unfamiliar sites without that explicit approval still use the delay.
+
+**Automatic local tuning:** Judge consults your current completed whitelist, blocked words and exceptions, extra locks, Google DNS blocks, ordered rules and manga list. Completed whole-site entries can teach only their exact non-leisure host (plus its conventional `www` variant for a two-label domain), with useful-content evidence still required. Pending/path-only approvals and broad suffix Allow rules never become blanket trust. Relevant rule changes or app upgrades invalidate old Judge grants until a fresh check; existing normal whitelist entries remain intact. While monitoring is active, Judge automatically rechecks previously granted eligible hosts after rule changes, retrying failed checks at most once per five minutes per host. Your private preferences stay on the phone and are not bundled into public releases.
 
 Judge is **not a foolproof classifier of the entire web**. Other protections remain active; Judge approvals require connected browser monitoring. Remove a grant under **Judge approvals**. An existing independent Allow rule or manual whitelist approval is separate from Judge and can still permit a site. See [coverage, enforcement, and limitations](docs/judge.md).
 

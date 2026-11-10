@@ -185,7 +185,7 @@ class BrowserKeywordService : AccessibilityService() {
             if (browser == Policy.CHROME) {
                 val address = browserAddress(root, browser, visibleOnly = false)
                 val config = ChromeNavigationConfig(Store.chromeLock(this), Store.activePatterns(this),
-                    Store.extraLockedSites(this).map { it.domain }.toSet(), Store.domainRules(this), JudgeStore.active(this))
+                    Store.extraLockedSites(this).map { it.domain }.toSet(), Store.domainRules(this), JudgeStore.active(this), JudgeStore.eligible(this))
                 val blocked = address?.let { chromeNavigationCache.get(config).block(it) }
                 if (address != null && blocked != null) {
                     if (blocked == ChromeNavigationBlock.WHITELIST) {

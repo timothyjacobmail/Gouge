@@ -6,9 +6,9 @@ import java.util.Locale
 
 internal enum class JudgeDecision { IMMEDIATE, DELAY, UNVERIFIED }
 internal data class Judgement(val decision: JudgeDecision, val reason: String,
-                              val address: String = "", val hosts: Set<String> = emptySet())
+                              val address: String = "", val hosts: Set<String> = emptySet(), val policyRevision: String? = null)
 
-/** Website claims never expand this catalog. Only a signed app update can change it. */
+/** Website claims never expand the bundled catalog; completed user approvals are separate local evidence. */
 internal object JudgeRules {
     private data class ReviewedService(val name: String, val hosts: Set<String>, val identity: Regex, val purpose: Regex)
     private val services = listOf(
@@ -28,7 +28,7 @@ internal object JudgeRules {
         "youtube.com", "youtu.be", "youtube-nocookie.com", "googlevideo.com", "ytimg.com",
         "reddit.com", "redd.it", "redditmedia.com", "redditstatic.com", "redgifs.com",
         "instagram.com", "cdninstagram.com", "facebook.com", "fb.com", "fb.watch", "fbcdn.net",
-        "x.com", "twitter.com", "t.co", "twimg.com", "threads.net", "threads.com",
+        "x.com", "twitter.com", "t.co", "twimg.com", "threads.net", "threads.com", "linkedin.com", "lnkd.in",
         "mangadex.org", "mangadex.com", "weebcentral.com", "deviantart.com", "wixmp.com",
         "chess.com", "lichess.org", "chess24.com", "twitch.tv", "kick.com", "tiktok.com",
         "netflix.com", "primevideo.com", "disneyplus.com", "hulu.com", "max.com", "hbomax.com",
@@ -81,7 +81,7 @@ internal object JudgeRules {
         return text.replace(Regex("&[a-zA-Z]+;"), " ").replace(Regex("\\s+"), " ").trim()
     }
 
-    fun inspect(address: String, html: String): Judgement {
+    fun inspect(address: String, html: String, preferences: JudgePreferences = JudgePreferences()): Judgement {
         val uri = webUri(address) ?: return Judgement(JudgeDecision.UNVERIFIED, "Use a public HTTPS website on its normal port.")
         if (leisureHost(uri.host) || unsafeRoute(address))
             return Judgement(JudgeDecision.DELAY, "Leisure content or a redirect route keeps the normal whitelist delay.")
@@ -95,20 +95,24 @@ internal object JudgeRules {
             return Judgement(JudgeDecision.UNVERIFIED, "The page could not be read reliably. The normal delay still applies.")
         if (leisureWords.containsMatchIn(text))
             return Judgement(JudgeDecision.DELAY, "The page contains leisure or mixed-purpose content. The normal delay still applies.")
+        preferences.veto(address, text)?.let { return Judgement(JudgeDecision.DELAY, it) }
         val service = services.firstOrNull { uri.host in it.hosts }
-        if (service == null)
+        if (service == null && uri.host in preferences.learnedHosts && !preferences.recognizesUsefulContent(uri.host, text))
+            return Judgement(JudgeDecision.UNVERIFIED, "This host has a completed whitelist approval, but the readable page does not confirm its identity and practical purpose. Its ordinary whitelist permission is unchanged.")
+        if (service == null && !preferences.recognizesUsefulContent(uri.host, text))
             return Judgement(JudgeDecision.UNVERIFIED, "Page inspected, but this domain is not independently reviewed. Its text alone cannot authorize immediate access.")
-        val identity = service.identity.containsMatchIn(text)
-        val purpose = service.purpose.containsMatchIn(text)
+        val identity = service?.identity?.containsMatchIn(text) ?: true
+        val purpose = service?.purpose?.containsMatchIn(text) ?: true
         if (!identity || !purpose)
-            return Judgement(JudgeDecision.UNVERIFIED, "This page does not confirm ${service.name}. The normal delay still applies.")
+            return Judgement(JudgeDecision.UNVERIFIED, "This page does not confirm ${service?.name}. The normal delay still applies.")
         val links = if (leisureLinks) " Links to leisure platforms were found; those destinations remain blocked." else ""
-        return Judgement(JudgeDecision.IMMEDIATE, "Reviewed ${service.name}; readable content confirms its purpose.$links", uri.toASCIIString(), setOf(uri.host))
+        val evidence = service?.let { "Reviewed ${it.name}" } ?: "Completed whole-site approval in your whitelist"
+        return Judgement(JudgeDecision.IMMEDIATE, "$evidence; readable content confirms a practical purpose.$links", uri.toASCIIString(), setOf(uri.host), preferences.revision)
     }
 
     /** Persisted entries are never trusted as arbitrary website approvals. */
-    fun activeHosts(saved: Set<String>, extraLocks: Set<String>, domainRules: List<DomainRule>): Set<String> =
-        saved.filter { host -> host in reviewedHosts && !leisureHost(host) &&
+    fun activeHosts(saved: Set<String>, extraLocks: Set<String>, domainRules: List<DomainRule>, eligibleHosts: Set<String> = reviewedHosts): Set<String> =
+        saved.filter { host -> host in eligibleHosts && !leisureHost(host) &&
             extraLocks.none { host == it || host.endsWith(".$it") } &&
             DomainRules(domainRules).match(host)?.rule?.action != DomainAction.BLOCK }.toSet()
 }

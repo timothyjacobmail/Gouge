@@ -9,6 +9,15 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ChromeRestrictionsTest {
+    @Test fun personalizedJudgeHostsStayExactAndCannotAuthorizeLeisure() {
+        val policy = ChromeRestrictions.update(Bundle(), true, emptyList(),
+            judgeHosts = setOf("workshop.example", "youtube.com"),
+            judgeEligibleHosts = JudgeRules.reviewedHosts + setOf("workshop.example", "youtube.com"))!!
+        assertTrue(allowed(policy).contains("https://.workshop.example:443/"))
+        assertFalse(allowed(policy).any { it.contains("youtube") })
+        val revoked = ChromeRestrictions.update(policy, true, emptyList(), judgeHosts = setOf("workshop.example"))!!
+        assertFalse(allowed(revoked).any { it.contains("workshop.example") })
+    }
     @Test fun judgeNeverGrantsLeisureOrSubdomainWildcardsAndHonorsExtraLocks() {
         val policy = ChromeRestrictions.update(Bundle(), true, emptyList(), judgeHosts = setOf("www.edcad.ae", "youtube.com", "unknown.example"))!!
         assertTrue(allowed(policy).contains("https://.www.edcad.ae:443/"))

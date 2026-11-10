@@ -47,7 +47,10 @@ class JudgeActivity : AppCompatActivity() {
             open.visibility = View.GONE
             result.text = "Reading the public page and checking its destination…"
             job = executor.submit {
-                val judgement = try { WebsiteJudge(leisureCatalog = WatchdogStore.domains(applicationContext)).judge(input) }
+                val judgement = try {
+                    val policy = JudgeStore.snapshot(applicationContext)
+                    WebsiteJudge(leisureCatalog = policy.leisureCatalog, preferences = policy).judge(input)
+                }
                     catch (_: Exception) { Judgement(JudgeDecision.UNVERIFIED, "Judge could not verify this page. The normal delay still applies.") }
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
@@ -82,8 +85,10 @@ class JudgeActivity : AppCompatActivity() {
             setPadding(padding, padding, padding, padding)
             addView(UiStyle.label(this@JudgeActivity, "Judge", 26f))
             addView(UiStyle.label(this@JudgeActivity, "Known leisure sites always keep the normal whitelist delay, including educational pages on social or entertainment platforms."))
-            addView(UiStyle.label(this@JudgeActivity, "Judge reads public HTML and redirects. It grants immediate access only when a reviewed service domain and readable page content agree. Unknown, mixed, login-only and unreadable sites keep their delay. No website classifier is foolproof."))
-            addView(UiStyle.label(this@JudgeActivity, "Reviewed services: ${JudgeRules.reviewedServiceNames.joinToString("; ")}. Each host must pass its own content check; other subdomains and links are not approved."))
+            addView(UiStyle.label(this@JudgeActivity, "Judge uses your current whitelist, blocked words, exceptions, domain rules and extra locks automatically. Completed whole-site approvals can teach it exact hosts; broad suffix rules and path-only approvals cannot. Readable useful content is still required. Unknown or leisure sites keep their delay."))
+            val policy = JudgeStore.snapshot(this@JudgeActivity)
+            addView(UiStyle.label(this@JudgeActivity, "Local tuning: ${policy.learnedHosts.size} eligible hosts from completed whole-site approvals, ${policy.blockedWords.size} blocked words, ${policy.extraLocks.size} extra locked sites. Rule changes deactivate old Judge grants until an automatic recheck succeeds; you can also check manually."))
+            addView(UiStyle.label(this@JudgeActivity, "Bundled reviewed services: ${JudgeRules.reviewedServiceNames.joinToString("; ")}. Each host must pass its own content check; other subdomains and links are not approved."))
             addView(address); addView(inspect); addView(result); addView(open)
             addView(UiStyle.button(this@JudgeActivity, "Use normal delayed whitelist") {
                 startActivity(BlockedSiteActivity.whitelistIntent(this@JudgeActivity, address.text.toString()))
@@ -99,7 +104,11 @@ class JudgeActivity : AppCompatActivity() {
         grants.removeAllViews()
         val hosts = JudgeStore.saved(this).sorted()
         if (hosts.isEmpty()) grants.addView(UiStyle.label(this, "No immediate approvals."))
-        hosts.forEach { host -> grants.addView(UiStyle.button(this, "Remove $host") { JudgeStore.remove(this, host); renderGrants() }) }
+        val active = JudgeStore.active(this)
+        hosts.forEach { host ->
+            if (host !in active) grants.addView(UiStyle.label(this, "$host — waiting for a fresh successful check and active browser monitoring"))
+            grants.addView(UiStyle.button(this, "Remove $host") { JudgeStore.remove(this, host); renderGrants() })
+        }
     }
 
     override fun onDestroy() { job?.cancel(true); super.onDestroy() }
