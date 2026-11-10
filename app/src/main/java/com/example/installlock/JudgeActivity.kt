@@ -24,7 +24,6 @@ class JudgeActivity : AppCompatActivity() {
     private var job: Future<*>? = null
     private lateinit var address: EditText
     private lateinit var result: TextView
-    private lateinit var grants: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         DynamicColors.applyToActivityIfAvailable(this)
@@ -36,7 +35,6 @@ class JudgeActivity : AppCompatActivity() {
             setText(intent.getStringExtra("website").orEmpty())
         }
         result = UiStyle.label(this, "")
-        grants = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val inspect = UiStyle.button(this, "Judge this website", primary = true) {}
         val open = UiStyle.button(this, "Open approved page in Chrome") {}
         open.visibility = View.GONE
@@ -70,7 +68,6 @@ class JudgeActivity : AppCompatActivity() {
                                         .onFailure { result.text = "Chrome could not open. Check that it is installed and unlocked." }
                                 } else result.text = "This Judge approval is inactive. Check accessibility and your other locks."
                             }
-                            renderGrants()
                         } else {
                             result.text = "Immediate access was not granted. " + (JudgeStore.rejectionReason(this, judgement)
                                 ?: "The approval could not be saved. Please try again.")
@@ -93,22 +90,9 @@ class JudgeActivity : AppCompatActivity() {
             addView(UiStyle.button(this@JudgeActivity, "Use normal delayed whitelist") {
                 startActivity(BlockedSiteActivity.whitelistIntent(this@JudgeActivity, address.text.toString()))
             })
-            addView(UiStyle.label(this@JudgeActivity, "Judge approvals", 22f)); addView(grants)
             addView(UiStyle.button(this@JudgeActivity, "Back") { finish() })
         }
         setContentView(ScrollView(this).apply { addView(column) })
-        renderGrants()
-    }
-
-    private fun renderGrants() {
-        grants.removeAllViews()
-        val hosts = JudgeStore.saved(this).sorted()
-        if (hosts.isEmpty()) grants.addView(UiStyle.label(this, "No immediate approvals."))
-        val active = JudgeStore.active(this)
-        hosts.forEach { host ->
-            if (host !in active) grants.addView(UiStyle.label(this, "$host — waiting for a fresh successful check and active browser monitoring"))
-            grants.addView(UiStyle.button(this, "Remove $host") { JudgeStore.remove(this, host); renderGrants() })
-        }
     }
 
     override fun onDestroy() { job?.cancel(true); super.onDestroy() }

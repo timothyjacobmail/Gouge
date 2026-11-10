@@ -8,7 +8,7 @@ Install Lock is an Android self-control app that uses **device-owner management*
 
 ## Installation
 
-Requires **Android 11 or later**. Download the current debug APK from [version 1.8](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.8-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
+Requires **Android 11 or later**. Download the current debug APK from [version 1.8.1](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.8.1-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
 
 ### Without resetting: a computer and USB debugging
 
@@ -216,7 +216,7 @@ Known leisure platforms—including YouTube, Reddit, Instagram, Facebook, X/Twit
 
 **Automatic local tuning:** Judge consults your current completed whitelist, blocked words and exceptions, extra locks, Google DNS blocks, ordered rules and manga list. Completed whole-site entries can teach only their exact non-leisure host (plus its conventional `www` variant for a two-label domain), with useful-content evidence still required. Pending/path-only approvals and broad suffix Allow rules never become blanket trust. Relevant rule changes or app upgrades invalidate old Judge grants until a fresh check; existing normal whitelist entries remain intact. While monitoring is active, Judge automatically rechecks previously granted eligible hosts after rule changes, retrying failed checks at most once per five minutes per host. Your private preferences stay on the phone and are not bundled into public releases.
 
-Judge is **not a foolproof classifier of the entire web**. Other protections remain active; Judge approvals require connected browser monitoring. Remove a grant under **Judge approvals**. An existing independent Allow rule or manual whitelist approval is separate from Judge and can still permit a site. See [coverage, enforcement, and limitations](docs/judge.md).
+Judge is **not a foolproof classifier of the entire web**. Other protections remain active; Judge approvals require connected browser monitoring. The Judge page does not display the saved approval list. An existing independent Allow rule or manual whitelist approval is separate from Judge and can still permit a site. See [coverage, enforcement, and limitations](docs/judge.md).
 
 ## Banking mode
 
