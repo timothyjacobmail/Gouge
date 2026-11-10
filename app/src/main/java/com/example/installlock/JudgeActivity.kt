@@ -83,7 +83,7 @@ class JudgeActivity : AppCompatActivity() {
             addView(UiStyle.label(this@JudgeActivity, "Judge", 26f))
             addView(UiStyle.label(this@JudgeActivity, "Known leisure sites always keep the normal whitelist delay, including educational pages on social or entertainment platforms."))
             addView(UiStyle.label(this@JudgeActivity, "Judge reads public HTML and redirects. It grants immediate access only when a reviewed service domain and readable page content agree. Unknown, mixed, login-only and unreadable sites keep their delay. No website classifier is foolproof."))
-            addView(UiStyle.label(this@JudgeActivity, "Reviewed service: Emirates Driving Company (EDC). Only edcad.ae, www.edcad.ae, pay.edcad.ae and elearning.edcad.ae are eligible. Each host must pass its own check; other subdomains and links are not approved."))
+            addView(UiStyle.label(this@JudgeActivity, "Reviewed services: ${JudgeRules.reviewedServiceNames.joinToString("; ")}. Each host must pass its own content check; other subdomains and links are not approved."))
             addView(address); addView(inspect); addView(result); addView(open)
             addView(UiStyle.button(this@JudgeActivity, "Use normal delayed whitelist") {
                 startActivity(BlockedSiteActivity.whitelistIntent(this@JudgeActivity, address.text.toString()))

@@ -10,7 +10,20 @@ internal data class Judgement(val decision: JudgeDecision, val reason: String,
 
 /** Website claims never expand this catalog. Only a signed app update can change it. */
 internal object JudgeRules {
-    val reviewedHosts = setOf("edcad.ae", "www.edcad.ae", "pay.edcad.ae", "elearning.edcad.ae")
+    private data class ReviewedService(val name: String, val hosts: Set<String>, val identity: Regex, val purpose: Regex)
+    private val services = listOf(
+        ReviewedService("EDC driving training", setOf("edcad.ae", "www.edcad.ae", "pay.edcad.ae", "elearning.edcad.ae"),
+            Regex("(?i)(emirates driving|edc student|edc e-learning|edc elearning)"),
+            Regex("(?i)(driving|driver|licen[cs]e|training|practical|theory|lesson|course)")),
+        ReviewedService("iLovePDF document tools", setOf("ilovepdf.com", "www.ilovepdf.com"),
+            Regex("(?i)\\bi\\s*love\\s*pdf\\b"),
+            Regex("(?i)\\b(merge|split|compress|convert|edit|sign|organize|ocr)\\b")),
+        ReviewedService("Adhoc Safety fire/security services", setOf("adhocsafety.com", "www.adhocsafety.com"),
+            Regex("(?i)\\bad\\s*hoc\\b"),
+            Regex("(?i)(fire[ -]?(safety|alarm|fighting|protection|suppression)|security systems|civil defen[cs]e)"))
+    )
+    val reviewedHosts = services.flatMap { it.hosts }.toSet()
+    val reviewedServiceNames = services.map { it.name }
     private val leisureDomains = setOf(
         "youtube.com", "youtu.be", "youtube-nocookie.com", "googlevideo.com", "ytimg.com",
         "reddit.com", "redd.it", "redditmedia.com", "redditstatic.com", "redgifs.com",
@@ -82,14 +95,15 @@ internal object JudgeRules {
             return Judgement(JudgeDecision.UNVERIFIED, "The page could not be read reliably. The normal delay still applies.")
         if (leisureWords.containsMatchIn(text))
             return Judgement(JudgeDecision.DELAY, "The page contains leisure or mixed-purpose content. The normal delay still applies.")
-        if (uri.host !in reviewedHosts)
+        val service = services.firstOrNull { uri.host in it.hosts }
+        if (service == null)
             return Judgement(JudgeDecision.UNVERIFIED, "Page inspected, but this domain is not independently reviewed. Its text alone cannot authorize immediate access.")
-        val identity = Regex("(?i)(emirates driving|edc student|edc e-learning|edc elearning)").containsMatchIn(text)
-        val purpose = Regex("(?i)(driving|driver|licen[cs]e|training|practical|theory|lesson|course)").containsMatchIn(text)
+        val identity = service.identity.containsMatchIn(text)
+        val purpose = service.purpose.containsMatchIn(text)
         if (!identity || !purpose)
-            return Judgement(JudgeDecision.UNVERIFIED, "This page does not confirm the reviewed driving-training service. The normal delay still applies.")
+            return Judgement(JudgeDecision.UNVERIFIED, "This page does not confirm ${service.name}. The normal delay still applies.")
         val links = if (leisureLinks) " Links to leisure platforms were found; those destinations remain blocked." else ""
-        return Judgement(JudgeDecision.IMMEDIATE, "Reviewed driving-training service; readable content confirms its purpose.$links", uri.toASCIIString(), setOf(uri.host))
+        return Judgement(JudgeDecision.IMMEDIATE, "Reviewed ${service.name}; readable content confirms its purpose.$links", uri.toASCIIString(), setOf(uri.host))
     }
 
     /** Persisted entries are never trusted as arbitrary website approvals. */

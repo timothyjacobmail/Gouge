@@ -8,7 +8,7 @@ Install Lock is an Android self-control app that uses **device-owner management*
 
 ## Installation
 
-Requires **Android 11 or later**. Download the current debug APK from [version 1.7.2](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.2-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
+Requires **Android 11 or later**. Download the current debug APK from [version 1.7.3](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.3-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
 
 ### Without resetting: a computer and USB debugging
 
@@ -202,7 +202,15 @@ Approved communities generate linked Chrome path permissions with no second wait
 
 Open **Judge** from Browser & Google, the Chrome whitelist, or a blocked Chrome page. Enter a public HTTPS URL and tap **Judge this website**. It checks redirects, readable HTML, and outgoing links without executing JavaScript or sending page text to an AI provider.
 
-**Immediate approval currently supports only the reviewed Emirates Driving Company hosts:** `edcad.ae`, `www.edcad.ae`, `pay.edcad.ae`, and `elearning.edcad.ae`. Each host must pass its own content check. A positive result grants separate exact-host HTTPS access; it does not grant arbitrary subdomains or follow-on links.
+**Reviewed services eligible for immediate approval:**
+
+| Service | Eligible hosts |
+| --- | --- |
+| Emirates Driving Company | `edcad.ae`, `www.edcad.ae`, `pay.edcad.ae`, `elearning.edcad.ae` |
+| iLovePDF document tools | `ilovepdf.com`, `www.ilovepdf.com` |
+| Adhoc Safety fire/security services | `adhocsafety.com`, `www.adhocsafety.com` |
+
+Each host must pass its own content check for that service's identity and purpose. A positive result grants separate exact-host HTTPS access; it does not grant arbitrary subdomains or follow-on links.
 
 Known leisure platforms—including YouTube, Reddit, Instagram, Facebook, X/Twitter, MangaDex, Weeb Central, DeviantArt, and Chess.com—cannot receive Judge approvals, even for educational-looking pages. Unknown, mixed-purpose, login-only, unreadable, or anti-bot-blocked pages keep the normal delay. Useful but unreviewed sites must still use the delayed whitelist.
 
