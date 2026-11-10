@@ -1,6 +1,6 @@
 # Judge
 
-Open **Browser & Google → Judge**, **Chrome whitelist → Judge a website**, or **Judge this website** on Chrome's blocked-page screen. Enter the HTTPS address and tap **Judge this website**. No normal whitelist password, saved approval time, or pending task is changed by a rejected judgement.
+Open **Browser & Google → Judge**, **Chrome whitelist → Judge a website**, or **Judge this website** on Chrome's blocked-page screen. You can also choose **Chrome → Share → Install Lock → Judge for immediate access**. The share screen passes its currently selected or edited address to Judge. Enter or review the HTTPS address and tap **Judge this website**. No normal whitelist password, saved approval time, or pending task is changed by a rejected judgement.
 
 Judge is deliberately conservative. A website's own text cannot establish that it is safe for immediate access: a leisure site can call itself educational, and an unfamiliar site can copy a legitimate business page. No program can promise perfect classification of every website, future page, embedded resource, or changing domain. This implementation therefore does **not** grant immediate access to arbitrary sites that merely appear productive.
 

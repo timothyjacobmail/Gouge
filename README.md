@@ -8,7 +8,7 @@ Install Lock is an Android self-control app that uses **device-owner management*
 
 ## Installation
 
-Requires **Android 11 or later**. Download the current debug APK from [version 1.7.1](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.1-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
+Requires **Android 11 or later**. Download the current debug APK from [version 1.7.2](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.7.2-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
 
 ### Without resetting: a computer and USB debugging
 
@@ -160,7 +160,7 @@ Use **Check category** to inspect a domain, or **Add website to manga/comics cat
 
 Open **Browser & Google → Chrome whitelist**. Turn the whitelist on to restrict Chrome to active approvals. Other detected browsers are suspended while this mode is active. With no active approvals, Chrome can block all ordinary websites.
 
-Choose **Add site**, or share a URL to Install Lock from Chrome or the Android share sheet. You can request a whole domain or a narrower path. Domain entries also cover subdomains; path entries cover matching path prefixes. Confirm the request and wait for its single approval countdown. Active entries show a check mark. Removing a manual approval is immediate; turning the whitelist off is a delayed task.
+Choose **Add site**, or share a URL to Install Lock from Chrome or the Android share sheet. The shared-site screen offers **Judge for immediate access** for the currently selected or edited HTTPS address, alongside the ordinary delayed approval. Judge's reviewed-domain and content rules still apply; rejected or unverified sites keep the normal delay. You can request a whole domain or a narrower path for the delayed whitelist. Domain entries also cover subdomains; path entries cover matching path prefixes. Confirm the request and wait for its single approval countdown. Active entries show a check mark. Removing a manual approval is immediate; turning the whitelist off is a delayed task.
 
 The blocked-page screen also provides **Whitelist this site**, so Chrome's Share menu is not required. Linked Reddit community paths and first-matching domain Allow rules can independently permit access. Approved pages can use narrowly scoped embedded reCAPTCHA resources without approving all Google pages. See [Chrome whitelist details](docs/chrome-whitelist.md).
 

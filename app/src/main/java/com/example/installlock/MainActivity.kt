@@ -957,6 +957,14 @@ class MainActivity : AppCompatActivity() {
         views.addAll(listOf(
             label(if (choices != null) "Selected address (editable)" else "Website address"),
             site, msg,
+            button("Judge for immediate access") {
+                val selected = site.text.toString()
+                if (JudgeRules.webUri(selected) == null) {
+                    msg.text = "Judge needs a public HTTPS website on its normal port. You can still use the delayed whitelist for other supported addresses."
+                } else {
+                    startActivity(JudgeActivity.openIntent(this, selected))
+                }
+            },
             button(if (choices != null) "Add selected address" else "Add") {
                 val s = Store.normalizeSite(site.text.toString())
                 when {
