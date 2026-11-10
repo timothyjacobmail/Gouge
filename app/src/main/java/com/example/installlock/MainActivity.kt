@@ -543,6 +543,7 @@ class MainActivity : AppCompatActivity() {
             browserActions(),
             additionalProtections(),
             section("Settings & passwords", "Each save and password change is scoped to its own task",
+                button("App updates") { startActivity(Intent(this, UpdateActivity::class.java)) },
                 button("Settings") { openSettings() },
                 button("Task passwords") { goTo { showTaskPasswords() } },
                 button("About & licenses") { goTo { showAbout() } }),
@@ -613,6 +614,7 @@ class MainActivity : AppCompatActivity() {
         add(SearchDestination("Google VPN filter", "dns filtering block unblock domain turn off on") { showGoogleFilter() })
         add(SearchDestination("Google DNS log", "vpn domain history requests unblock") { showDnsLog() })
         add(SearchDestination("Settings", "general timing durations security waiting periods unlock presets change settings tasks") { showSettings() })
+        add(SearchDestination("App updates", "download install upgrade version GitHub") { startActivity(Intent(this@MainActivity, UpdateActivity::class.java)) })
         TimingOption.entries.filterNot { it == TimingOption.SITE_WAIT }.forEach { option ->
             add(SearchDestination(option.title, "settings timing security ${option.unit}") { showSettings(option) })
         }
