@@ -4,6 +4,73 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TaskVaultTest {
+    @Test fun cachedPasswordVerificationStillHonorsCurrentLockoutAndPasswordChanges() {
+        val data = Memory()
+        val scope = TaskScope(TaskKind.REDDIT_ALLOW)
+        val vault = TaskVault(data, now = { 1000L })
+        assertNull(vault.install(listOf(NewTaskPassword(scope, "CachedPassword1")), false))
+        assertTrue(vault.check(scope, "CachedPassword1"))
+        data.write(mapOf("task.${scope.id}.lockout" to "2000"))
+        assertFalse(vault.check(scope, "CachedPassword1"))
+        data.write(mapOf("task.${scope.id}.lockout" to "0"))
+        assertNull(vault.change(scope, "CachedPassword1", "ChangedPassword2", true))
+        assertFalse(vault.check(scope, "CachedPassword1"))
+        assertTrue(vault.check(scope, "ChangedPassword2"))
+    }
+    @Test fun playStoreUpgradeCreatesOnlyItsOwnCredentialWithTwoMinuteDelayAndCannotReplaceIt() {
+        val data = Memory()
+        val vault = TaskVault(data)
+        val existing = TaskScope(TaskKind.WHITELIST_ADD)
+        val scope = TaskScope(TaskKind.PLAY_STORE_DELAY)
+        assertNull(vault.install(listOf(NewTaskPassword(existing, "ExistingPassword1")), false))
+        assertNotNull(vault.installPlayStoreDelay("ChosenPassword1"))
+        val generated = TaskVault.generatePassword(scope)
+        assertNull(vault.installPlayStoreDelay(generated))
+        assertEquals("2", data.get("task.${scope.id}.delayMinutes"))
+        assertTrue(vault.check(scope, generated))
+        assertFalse(vault.check(existing, generated))
+        assertTrue(vault.check(existing, "ExistingPassword1"))
+        assertNotNull(vault.installPlayStoreDelay(TaskVault.generatePassword(scope)))
+        assertTrue(vault.check(scope, generated))
+    }
+    @Test fun nativePasswordCiphertextIsCommittedWithItsHashForSetupAndChange() {
+        val data = Memory()
+        val scope = TaskScope(TaskKind.REDDIT_ALLOW)
+        val vault = TaskVault(data, encryptPassword = { task, value -> "encrypted:${task.id}:$value" })
+        assertNull(vault.install(listOf(NewTaskPassword(scope, "NativePassword1")), false))
+        assertEquals("encrypted:${scope.id}:NativePassword1", data.get("task.${scope.id}.secret"))
+        assertNull(vault.change(scope, "NativePassword1", "ChangedPassword2", true))
+        assertEquals("encrypted:${scope.id}:ChangedPassword2", data.get("task.${scope.id}.secret"))
+        assertFalse(vault.check(scope, "NativePassword1"))
+        assertTrue(vault.check(scope, "ChangedPassword2"))
+    }
+    @Test fun encryptionFailureLeavesTheExistingCredentialIntact() {
+        val data = Memory()
+        val scope = TaskScope(TaskKind.REDDIT_ALLOW)
+        assertNull(TaskVault(data).install(listOf(NewTaskPassword(scope, "OriginalPassword1")), false))
+        val vault = TaskVault(data, encryptPassword = { _, _ -> error("Keystore unavailable") })
+        try { vault.change(scope, "OriginalPassword1", "ChangedPassword2", true); fail("Encryption failure ignored") }
+        catch (_: IllegalStateException) { }
+        assertTrue(vault.check(scope, "OriginalPassword1"))
+        assertFalse(vault.check(scope, "ChangedPassword2"))
+    }
+    @Test fun redditUpgradeCanAddOnlyMissingScopesAndCannotReplaceExistingCredentials() {
+        val vault = TaskVault(Memory())
+        val old = TaskScope(TaskKind.WHITELIST_ADD)
+        val add = TaskScope(TaskKind.REDDIT_ALLOW)
+        val off = TaskScope(TaskKind.REDDIT_OFF)
+        val addPassword = TaskVault.generatePassword(add)
+        val offPassword = TaskVault.generatePassword(off)
+        assertNull(vault.install(listOf(NewTaskPassword(old, "OldTaskPassword1")), false))
+        assertNotNull(vault.installReddit(listOf(NewTaskPassword(old, "Replacement1")), false))
+        assertNotNull(vault.installReddit(listOf(NewTaskPassword(add, "RedditAdd1")), false))
+        assertNotNull(vault.installReddit(listOf(NewTaskPassword(add, "OldTaskPassword1"), NewTaskPassword(off, "RedditOff2")), false))
+        assertNull(vault.installReddit(listOf(NewTaskPassword(add, addPassword), NewTaskPassword(off, offPassword)), false))
+        assertTrue(vault.check(old, "OldTaskPassword1"))
+        assertTrue(vault.check(add, addPassword))
+        assertTrue(vault.check(off, offPassword))
+        assertNotNull(vault.installReddit(listOf(NewTaskPassword(add, "Replacement1"), NewTaskPassword(off, "Replacement2")), false))
+    }
     @Test fun matchingSavedSecretsDoesNotConsumeAttemptsOrGrantTaskAccess() {
         val data = Memory()
         val vault = TaskVault(data)

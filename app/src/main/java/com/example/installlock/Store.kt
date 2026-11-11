@@ -260,10 +260,10 @@ object Store {
         p(c).edit().putStringSet("sites", set).remove("siteActiveAt.$pattern").apply()
     }
 
-    /** Only sites whose configured wait is over. */
+    /** Approved subreddits already completed their task wait; manual sites retain their own timers. */
     fun activePatterns(c: Context): List<String> {
         val now = System.currentTimeMillis()
-        return sites(c).filter { now >= it.activeAt }.map { it.pattern }
+        return (sites(c).filter { now >= it.activeAt }.map { it.pattern } + RedditStore.chromePatterns(c)).distinct()
     }
 
     /** "https://www.Example.com/" -> "example.com". Null if it isn't a specific, safe site. */

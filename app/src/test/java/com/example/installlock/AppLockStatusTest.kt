@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AppLockStatusTest {
+    @Test fun playStoreCannotBypassItsDelayWhenMonitoringIsDisconnected() {
+        val reasons = AppLockReasons(playStoreServiceMissing = true)
+        assertTrue(reasons.shouldLock)
+        assertTrue(reasons.descriptions().single().contains("two-minute opening delay"))
+        assertFalse(reasons.copy(playStoreServiceMissing = false).shouldLock)
+    }
     @Test fun domainRulesKeepAccessibilityRequiredWhenKeywordFilteringIsOff() {
         val reasons = AppLockReasons(domainServiceMissing = true)
         assertTrue(reasons.shouldLock)

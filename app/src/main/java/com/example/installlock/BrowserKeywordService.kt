@@ -28,6 +28,8 @@ import com.example.delayedsecrect.PasswordEntryResult
 class BrowserKeywordService : AccessibilityService() {
     override fun dump(fd: java.io.FileDescriptor, writer: java.io.PrintWriter, args: Array<out String>) {
         writer.println("Browser monitor connected=${connections.connected} current=${connections.owns(this)} enabled=${isEnabled(this)}")
+        writer.println("PlayStore: ${playStoreMonitor.debugStatus()}")
+        writer.println("connected=${connections.connected} banking=${BankingMode.active(this)}")
     }
     private val handler = Handler(Looper.getMainLooper())
     private var targets = setOf(Policy.CHROME, BrowserPackages.GOOGLE_APP)
@@ -42,6 +44,8 @@ class BrowserKeywordService : AccessibilityService() {
     private val queryTextCache = ParsedValueCache<List<String>, GoogleResultText>(::GoogleResultText)
     private val chromeNavigationCache = ParsedValueCache<ChromeNavigationConfig, ChromeNavigationFilter>(::ChromeNavigationFilter)
     private val prefs by lazy { getSharedPreferences("install_lock", Context.MODE_PRIVATE) }
+    private val redditMonitor by lazy { RedditMonitor(this, handler) }
+    private val playStoreMonitor by lazy { PlayStoreMonitor(this, handler) }
     private val watchdogWarnings by lazy { WatchdogWarningBanner(this) }
     private val categoryWatchdog by lazy {
         WebsiteWatchdogMonitor(this, handler, { targets }, watchdogWarnings) { root, browser -> browserHost(root, browser, visibleOnly = false) }
@@ -54,6 +58,12 @@ class BrowserKeywordService : AccessibilityService() {
         Store.chromeLock(this) || Store.extraLockedSites(this).isNotEmpty()
 
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key in RedditStore.keys) {
+            refreshTargets()
+            redditMonitor.changed()
+            scheduleScan(0)
+            Policy.sweep(this)
+        }
         if (key == "browserKeywords" || key == "keywordRemovalRequests" ||
             key == "keywordExceptions" || key == "genericKeywordExceptions") scheduleScan(0)
         if (key == "keywordFilterEnabled") {
@@ -69,11 +79,18 @@ class BrowserKeywordService : AccessibilityService() {
         }
     }
     private val packageReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) { refreshTargets() }
+        override fun onReceive(context: Context, intent: Intent) {
+            RedditStore.invalidate()
+            refreshTargets()
+            redditMonitor.changed()
+            Policy.sweep(context)
+        }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
+        if (BankingMode.active(this)) { disableSelf(); return }
         refreshTargets()
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
         if (!registered) {
@@ -89,12 +106,15 @@ class BrowserKeywordService : AccessibilityService() {
             registered = true
         }
         connections.connect(this)
+        EnforcementRecovery.recover(this)
         PasswordFieldEntry.attach(::enterFocusedPassword)
         SecretClipboard.attachAccessibility(this, ::updateEventPackages) {
             startActivity(ClipboardCleanupActivity.openIntent(this))
         }
         categoryWatchdog.start()
         rapidScrollWatchdog.start()
+        redditMonitor.start()
+        playStoreMonitor.start()
         Policy.sweep(this)
         scheduleScan(0)
     }
@@ -102,20 +122,25 @@ class BrowserKeywordService : AccessibilityService() {
     private fun refreshTargets() {
         // Some Android versions hide suspended handlers from intent queries. Keep their targets
         // registered before the guard releases them as this service reconnects.
-        targets = BrowserPackages.keywordTargets(this) + (Store.keywordGuardPackages(this) - ShortFormFeeds.nativePackages)
+        RedditStore.discover(this)
+        targets = BrowserPackages.keywordTargets(this) + (Store.keywordGuardPackages(this) - ShortFormFeeds.nativePackages - RedditStore.trackedClients(this))
         updateEventPackages()
     }
 
     private fun updateEventPackages() {
-        // Observe other apps only for the one-copy "until pasted" option. Their page
-        // content is never scanned; normal browser filtering still uses targets below.
-        serviceInfo = serviceInfo.apply {
-            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-            packageNames = if (SecretClipboard.watchingPaste) null else (targets + ShortFormFeeds.nativePackages).toTypedArray()
+        // Package broadcasts can arrive while Android is unbinding/rebinding this service.
+        val info = serviceInfo ?: return
+        // Foreground package changes end Play Store sessions. Page content is still
+        // scanned only for targets below; other apps supply package identity only.
+        serviceInfo = info.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            packageNames = null
         }
     }
 
     private fun enterFocusedPassword(value: String): PasswordEntryResult {
+        if (BankingMode.active(this)) return PasswordEntryResult(false, "Direct password entry is paused during banking mode.")
         if (getSystemService(KeyguardManager::class.java).isDeviceLocked)
             return PasswordEntryResult(false, "Unlock your phone, then tap the app's password field.")
         // A touch on a floating window can make it the active accessibility window.
@@ -143,6 +168,9 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (BankingMode.active(this)) return
+        playStoreMonitor.check(event?.takeIf { it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }?.packageName?.toString())
+        if (event != null) redditMonitor.onEvent(event)
         try { SecretClipboard.onAccessibilityEvent(event) } catch (_: RuntimeException) {
             // A transient clipboard or accessibility error must not interrupt browser enforcement.
         }
@@ -177,6 +205,7 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     private fun scanPage() {
+        if (BankingMode.active(this)) return
         if (!filteringRequired()) return
         val root = rootInActiveWindow ?: return
         try {
@@ -185,7 +214,8 @@ class BrowserKeywordService : AccessibilityService() {
             if (browser == Policy.CHROME) {
                 val address = browserAddress(root, browser, visibleOnly = false)
                 val config = ChromeNavigationConfig(Store.chromeLock(this), Store.activePatterns(this),
-                    Store.extraLockedSites(this).map { it.domain }.toSet(), Store.domainRules(this), JudgeStore.active(this), JudgeStore.eligible(this))
+                    Store.extraLockedSites(this).map { it.domain }.toSet(), Store.domainRules(this), JudgeStore.active(this), JudgeStore.eligible(this),
+                    TemporaryLinks.activeUrls(this))
                 val blocked = address?.let { chromeNavigationCache.get(config).block(it) }
                 if (address != null && blocked != null) {
                     if (blocked == ChromeNavigationBlock.WHITELIST) {
@@ -504,18 +534,23 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        playStoreMonitor.stop()
+        redditMonitor.stop()
         categoryWatchdog.stop()
         rapidScrollWatchdog.stop()
         handler.removeCallbacksAndMessages(null)
         scanScheduled = false
         handlingMatch = false
-        if (connected && isEnabled(this)) {
+        if (connections.owns(this) && isEnabled(this) && !BankingMode.active(this)) {
             categoryWatchdog.start()
             rapidScrollWatchdog.start()
+            redditMonitor.start()
+            playStoreMonitor.start()
         }
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         if (connections.disconnect(this)) {
             PasswordFieldEntry.detach()
             SecretClipboard.detachAccessibility()
@@ -528,6 +563,7 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        if (instance === this) instance = null
         if (connections.disconnect(this)) {
             PasswordFieldEntry.detach()
             SecretClipboard.detachAccessibility()
@@ -538,6 +574,12 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     companion object {
+        @Volatile private var instance: BrowserKeywordService? = null
+        internal fun pauseForBanking() {
+            instance?.let { service -> service.handler.post {
+                if (BankingMode.active(service)) { service.onInterrupt(); service.disableSelf() }
+            } }
+        }
         private val connections = ServiceConnectionState()
         // One query in memory only, so query echoes can be recognized even when Google's
         // current version doesn't expose a native query control. No search history is saved.
@@ -545,7 +587,8 @@ class BrowserKeywordService : AccessibilityService() {
 
         internal fun rememberGoogleSearch(query: String) { lastSubmittedGoogleQuery = query }
 
-        fun isReady(context: Context): Boolean = connections.connected && isEnabled(context)
+        fun isReady(context: Context): Boolean = BankingAccessibilityRules.monitoringReady(
+            BankingMode.active(context), connections.connected, isEnabled(context))
 
         fun isEnabled(context: Context): Boolean {
             val wanted = android.content.ComponentName(context, BrowserKeywordService::class.java)

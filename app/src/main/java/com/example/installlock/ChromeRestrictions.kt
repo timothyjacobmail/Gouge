@@ -22,7 +22,8 @@ internal object ChromeRestrictions {
     fun update(current: Bundle, lockOn: Boolean, activePatterns: List<String>,
                extraLockedDomains: List<String> = emptyList(), domainRules: List<DomainRule> = emptyList(),
                observedAllowedHosts: Set<String> = emptySet(), judgeHosts: Set<String> = emptySet(),
-               judgeEligibleHosts: Set<String> = JudgeRules.reviewedHosts): Bundle? {
+               judgeEligibleHosts: Set<String> = JudgeRules.reviewedHosts,
+               temporaryUrls: List<String> = emptyList()): Bundle? {
         if (!lockOn && extraLockedDomains.isEmpty()) {
             if (!current.containsKey(BLOCKLIST) && !current.containsKey(ALLOWLIST)) return null
             return Bundle(current).apply {
@@ -36,7 +37,13 @@ internal object ChromeRestrictions {
         val blocked = JSONArray((if (lockOn) listOf("*") else emptyList()) + extras.domains.sorted()).toString()
         val judged = JudgeRules.activeHosts(judgeHosts, extraLockedDomains.toSet(), domainRules, judgeEligibleHosts)
             .map { "https://.$it:443/" }
-        val websites = extras.allowedPatterns(activePatterns + ChromeDomainApprovals(domainRules).policyPatterns(observedAllowedHosts)) + judged
+        val ordered = DomainRules(domainRules)
+        val temporary = temporaryUrls.flatMap(TemporaryLinkRules::policyPatterns).filter { pattern ->
+            val host = pattern.substringAfter("://").substringBefore('/').substringBefore(':').removePrefix(".")
+            !extras.domains.any { host == it || host.endsWith(".$it") } &&
+                ordered.match(host)?.rule?.action != DomainAction.BLOCK
+        }
+        val websites = extras.allowedPatterns(activePatterns + ChromeDomainApprovals(domainRules).policyPatterns(observedAllowedHosts)) + judged + temporary
         val resources = if (websites.isEmpty()) emptyList() else
             extras.allowedPatterns(captchaResources).map { "https://.$it" }
         val allowed = if (lockOn) JSONArray((websites + resources).distinct().sorted()).toString() else null

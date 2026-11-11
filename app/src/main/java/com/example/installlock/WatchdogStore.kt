@@ -6,7 +6,8 @@ import android.os.UserManager
 import android.provider.Settings
 
 internal object WatchdogStore {
-    fun monitoredPackages(c: Context) = BrowserPackages.keywordTargets(c) + ShortFormFeeds.nativePackages
+    fun monitoredPackages(c: Context) = BrowserPackages.keywordTargets(c) + ShortFormFeeds.nativePackages +
+        if (RedditStore.enabled(c)) RedditStore.targets(c) else emptySet()
     fun cooldownPackages(c: Context) = monitoredPackages(c) + "com.android.vending"
     private fun prefs(c: Context) = c.getSharedPreferences("category_watchdog", Context.MODE_PRIVATE)
     @Volatile private var processBoot: Int? = null

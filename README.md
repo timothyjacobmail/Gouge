@@ -164,6 +164,8 @@ Choose **Add site**, or share a URL to Install Lock from Chrome or the Android s
 
 The blocked-page screen also provides **Whitelist this site**, so Chrome's Share menu is not required. Linked Reddit community paths and first-matching domain Allow rules can independently permit access. Approved pages can use narrowly scoped embedded reCAPTCHA resources without approving all Google pages. See [Chrome whitelist details](docs/chrome-whitelist.md).
 
+For a one-off shared reel or page, choose **Temporarily whitelist a link (1 day)** on the share screen, or **Chrome whitelist → Temporary links (1 day)**. It uses the normal whitelist password delay and sends a **Link available to view now** notification when ready. Open the approved link to start 24 hours of access in Chrome; reopening does not extend it, and expiry automatically removes the temporary approval. Other protections still apply.
+
 ### Ordered domain rules
 
 Choose **Ordered domain rules** to add an **Exact domain**, **Domain or suffix**, or **Domain contains text** rule. Rules are checked from top to bottom: the **first matching rule wins**.

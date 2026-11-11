@@ -39,6 +39,7 @@ object Policy {
         dpm.setAutoTimeEnabled(admin, true)
         // Preserve all configured protected apps when refreshing our own process protection.
         enforceNoUninstall(c)
+        BackgroundPowerProtection.ensureEnabled(c)
         if (Build.VERSION.SDK_INT >= 33) {
             dpm.setPermissionGrantState(
                 admin, c.packageName, Manifest.permission.POST_NOTIFICATIONS,
@@ -90,6 +91,9 @@ object Policy {
         val dpm = dpm(c)
         val admin = admin(c)
         val pm = c.packageManager
+        val installed = pm.getInstalledPackages(0)
+        RedditStore.discover(c, installed)
+        val redditTargets = if (RedditStore.enabled(c)) RedditStore.targets(c) else emptySet()
         val now = System.currentTimeMillis()
         val cooldownRemaining = WatchdogStore.remaining(c)
         val focusRemaining = FocusLockStore.remaining(c)
@@ -97,7 +101,7 @@ object Policy {
         val focusManaged = FocusLockStore.managed(c)
         val discoveredBrowsers = BrowserPackages.discover(c)
         val browserTargets = discoveredBrowsers + BrowserPackages.GOOGLE_APP
-        val monitoredTargets = browserTargets + ShortFormFeeds.nativePackages
+        val monitoredTargets = browserTargets + ShortFormFeeds.nativePackages + redditTargets
         val cooldownTargets = monitoredTargets + "com.android.vending"
         val rapidCooldown = WatchdogStore.rapidCooldown(c)
         try { WatchdogStore.enforceInstallLock(c, cooldownRemaining > 0 || focusRemaining > 0) }
@@ -107,7 +111,9 @@ object Policy {
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
         )?.activityInfo?.packageName
         val protectedApps = Store.protectedApps(c)
-        val installed = pm.getInstalledPackages(0)
+        BankingAppStore.reconcile(c, installed)
+        val bankingWaits = BankingAppStore.waits(c)
+        val bankingManaged = BankingAppStore.managed(c)
         val curfewTargets = CurfewStore.enroll(c, installed, homePkg, now)
         val curfewManaged = CurfewStore.managed(c)
         val curfewUntil = CurfewRules.blockedUntil(now, CurfewStore.zone(), CurfewStore.appealedNight(c))
@@ -117,7 +123,7 @@ object Policy {
         val keywordFilterOn = Store.browserKeywordFilterEnabled(c)
         val domainRulesOn = Store.domainRules(c).isNotEmpty()
         val keywordBrowsers = if (!BrowserKeywordService.isReady(c))
-            monitoredTargets + previousKeywordGuard else emptySet()
+            monitoredTargets + (previousKeywordGuard - RedditStore.trackedClients(c)) else emptySet()
         val keywordReleaseRetries = mutableSetOf<String>()
         val googleVpnMissing = !DnsFilterService.isReady(c)
         val neverRules = Store.neverInstall(c)
@@ -131,7 +137,7 @@ object Policy {
                 catch (_: Exception) { null }
             // Keep managed apps visible when unlocked, and include any unexpected suspension.
             if (reasons.shouldLock || suspended != false || pkg.packageName in protectedApps ||
-                pkg.packageName == CHROME || pkg.packageName == BrowserPackages.GOOGLE_APP || categoryExemption != null) {
+                pkg.packageName == CHROME || pkg.packageName == PlayStoreDelayStore.PACKAGE || pkg.packageName == BrowserPackages.GOOGLE_APP || categoryExemption != null) {
                 statuses.add(AppLockStatus(pkg.packageName, info.loadLabel(pm).toString(), reasons, suspended, categoryExemption))
             }
         }
@@ -164,7 +170,7 @@ object Policy {
             // Previously guarded system apps must also be processed so they can be resumed.
             if (isSystem && !isProtected && !isBrowser && !isGuarded &&
                 !keywordPaused && !isGoogle && name !in previousKeywordGuard && name !in releaseTargets && name !in curfewManaged &&
-                name !in cooldownTargets && name !in focusManaged) {
+                name !in cooldownTargets && name !in focusManaged && name !in bankingManaged && name != PlayStoreDelayStore.PACKAGE) {
                 // Read status without changing policy for unrelated system apps.
                 if (name == CHROME) record(pkg, info, AppLockReasons())
                 continue
@@ -186,8 +192,12 @@ object Policy {
                 curfewUntil = curfewUntil.takeIf { name in curfewTargets },
                 focusUntil = (now + focusRemaining).takeIf { focusRemaining > 0 && name in focusTargets },
                 categoryCooldownUntil = (now + cooldownRemaining).takeIf { cooldownRemaining > 0 && name in cooldownTargets },
-                categoryServiceMissing = keywordPaused,
-                rapidScrollCooldown = rapidCooldown
+                categoryServiceMissing = keywordPaused && name !in redditTargets,
+                redditServiceMissing = keywordPaused && name in redditTargets,
+                rapidScrollCooldown = rapidCooldown,
+                bankingMode = BankingMode.active(c) && keywordPaused,
+                bankingListUntil = bankingWaits[name],
+                playStoreServiceMissing = name == PlayStoreDelayStore.PACKAGE && PlayStoreDelayStore.enabled(c) && !BrowserKeywordService.isReady(c)
             )
             val shouldLock = reasons.shouldLock
             try {
@@ -289,7 +299,8 @@ object Policy {
             val current = manager.getApplicationRestrictions(owner, CHROME)
             val updated = ChromeRestrictions.update(current, Store.chromeLock(c), Store.activePatterns(c),
                 Store.extraLockedSites(c).map { it.domain }, Store.domainRules(c),
-                synchronized(observedChromeAllows) { observedChromeAllows.toSet() }, JudgeStore.active(c), JudgeStore.eligible(c))
+                synchronized(observedChromeAllows) { observedChromeAllows.toSet() }, JudgeStore.active(c), JudgeStore.eligible(c),
+                TemporaryLinks.activeUrls(c))
             if (updated == null && !force) return
             manager.setApplicationRestrictions(owner, CHROME, updated ?: Bundle(current))
             if (RESTART_CHROME_ON_CHANGE) bounceChrome(c)

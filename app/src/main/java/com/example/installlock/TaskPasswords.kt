@@ -23,14 +23,30 @@ internal object TaskPasswords {
             changes.forEach { (key, value) -> edit.putString(key, value) }
             return edit.commit()
         }
-    }, lockout = { Store.timingConfig(c).passwordLockoutMs(it) })
+    }, lockout = { Store.timingConfig(c).passwordLockoutMs(it) },
+        encryptPassword = { scope, password -> NativeTaskPasswords.encrypt(c, scope, password) })
 
     fun ready(c: Context) = prefs(c).getString("task.ready", "") == "1"
     fun has(c: Context, scope: TaskScope) = vault(c).has(scope)
     fun remaining(c: Context, scope: TaskScope) = vault(c).remaining(scope)
     fun scopes(c: Context) = vault(c).scopes()
+    @Synchronized fun setupPlayStoreDelay(c: Context): String? {
+        val scope = TaskScope(TaskKind.PLAY_STORE_DELAY)
+        if (!ready(c)) return "Set up task passwords first."
+        if (!has(c, scope)) {
+            val password = TaskVault.generatePassword(scope)
+            vault(c).installPlayStoreDelay(password)?.let { return it }
+        }
+        val value = NativeTaskPasswords.password(c, scope) ?: return "The current task password must be attached before setup can finish."
+        val secrets = com.example.delayedsecrect.SecretStore(c)
+        if (secrets.getAll().none { it.value == value }) secrets.add("Play Store opening delay", value, 2)
+        return null
+    }
     fun required(c: Context) = TaskScope.global + Store.protectedApps(c).sorted().flatMap { TaskScope.appTasks(it) }
     @Synchronized fun check(c: Context, scope: TaskScope, password: String) = vault(c).check(scope, password)
+    @Synchronized fun setupReddit(c: Context, items: List<NewTaskPassword>, share: Boolean): String? =
+        if (RedditStore.enabled(c)) "Reddit protection is already enabled. Existing passwords cannot be replaced."
+        else vault(c).installReddit(items, share)
 
     @Synchronized fun migrate(c: Context, legacy: Map<Store.Pw, String>, items: List<NewTaskPassword>, share: Boolean): String? {
         if (ready(c)) return "Task passwords have already been set up."

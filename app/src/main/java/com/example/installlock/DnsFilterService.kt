@@ -53,6 +53,7 @@ class DnsFilterService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        EnforcementRecovery.recover(this)
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(
             "google_vpn", "Google VPN filter", NotificationManager.IMPORTANCE_LOW))

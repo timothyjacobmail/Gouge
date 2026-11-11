@@ -7,12 +7,24 @@ import android.os.Looper
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.Executors
+import java.util.concurrent.PriorityBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
-/** Only recent Google Play installs are checked. Network access never blocks a policy sweep. */
+/** Shared listing metadata for install waits and banking discovery; network work stays off policy/UI threads. */
 internal object PlayCategoryLookup {
-    private val executor = Executors.newSingleThreadExecutor()
-    private val pending = mutableSetOf<String>()
+    private class Request(var priority: Int, val sequence: Long, val work: (Request) -> Unit) : Runnable {
+        @Volatile var notifyPolicy = false
+        override fun run() = work(this)
+    }
+    private val sequence = AtomicLong()
+    private val executor = ThreadPoolExecutor(3, 3, 0L, TimeUnit.MILLISECONDS,
+        PriorityBlockingQueue<Runnable>(11, compareBy<Runnable> { (it as Request).priority }
+            .thenBy { (it as Request).sequence }))
+    private val pending = mutableMapOf<String, Request>()
+    private val generation = AtomicLong()
+    fun revision(): Long = generation.get()
     private val handler = Handler(Looper.getMainLooper())
     private const val RETRY_MS = 60_000L
     private const val REFRESH_MS = 24 * 60 * 60_000L
@@ -24,30 +36,53 @@ internal object PlayCategoryLookup {
         if (selected.isEmpty()) return null
         val installer = installer(c, pkg.packageName)
         if (installer != PlayCategoryRules.PLAY_STORE) return null
+        return PlayCategoryRules.exemption(installer, category(c, pkg, notifyPolicy = true)?.storeId, selected)
+    }
+
+    /** Any installed package can use its own Play listing for banking; install exemptions still
+     * require the Play installer above. A listing match is not proof that an app rejects accessibility. */
+    fun category(context: Context, pkg: PackageInfo, background: Boolean = false,
+                 notifyPolicy: Boolean = false): PlayInstallCategory? {
+        val c = context.applicationContext
         val prefs = c.getSharedPreferences("play_categories", Context.MODE_PRIVATE)
         val record = PlayCategoryRecord.decode(prefs.getString(pkg.packageName, null))
             ?.takeIf { it.matches(pkg.firstInstallTime, pkg.lastUpdateTime) }
         if (record == null || System.currentTimeMillis() >= record.retryAt) {
             synchronized(pending) {
-                if (pending.add(pkg.packageName)) executor.execute {
-                    try {
-                        val category = fetchCategory(pkg.packageName)
-                        val current = c.packageManager.getPackageInfo(pkg.packageName, 0)
-                        // An uninstall/reinstall/update while the request was in flight invalidates it.
-                        if (current.firstInstallTime == pkg.firstInstallTime && current.lastUpdateTime == pkg.lastUpdateTime &&
-                            installer(c, pkg.packageName) == PlayCategoryRules.PLAY_STORE) {
-                            prefs.edit().putString(pkg.packageName, PlayCategoryRecord(pkg.firstInstallTime,
-                                pkg.lastUpdateTime, category ?: record?.category.orEmpty(), System.currentTimeMillis() +
-                                        if (category == null) RETRY_MS else REFRESH_MS).encode()).apply()
-                            handler.post { Policy.sweep(c) }
-                        }
-                    } catch (_: Exception) {
-                        // Package removed or unavailable. The next sweep will re-evaluate it.
-                    } finally { synchronized(pending) { pending.remove(pkg.packageName) } }
+                val priority = if (background) 1 else 0
+                val existing = pending[pkg.packageName]
+                if (existing != null) {
+                    if (notifyPolicy) existing.notifyPolicy = true
+                    // A foreground bank/new-install check jumps ahead of queued bulk discovery.
+                    if (priority < existing.priority && executor.queue.remove(existing)) {
+                        existing.priority = priority
+                        executor.execute(existing)
+                    }
+                } else {
+                    val request = Request(priority, sequence.getAndIncrement()) { request ->
+                        try {
+                            val category = fetchCategory(pkg.packageName)
+                            val current = c.packageManager.getPackageInfo(pkg.packageName, 0)
+                            // An uninstall/reinstall/update while the request was in flight invalidates it.
+                            if (current.firstInstallTime == pkg.firstInstallTime && current.lastUpdateTime == pkg.lastUpdateTime) {
+                                prefs.edit().putString(pkg.packageName, PlayCategoryRecord(pkg.firstInstallTime,
+                                    pkg.lastUpdateTime, category ?: record?.category.orEmpty(), System.currentTimeMillis() +
+                                            if (category == null) RETRY_MS else REFRESH_MS).encode()).apply()
+                                generation.incrementAndGet()
+                                // Bulk banking results do not each trigger an unrelated full policy sweep.
+                                if (request.notifyPolicy) handler.post { Policy.sweep(c) }
+                            }
+                        } catch (_: Exception) {
+                            // Package removed or unavailable. The next sweep will re-evaluate it.
+                        } finally { synchronized(pending) { pending.remove(pkg.packageName) } }
+                    }
+                    request.notifyPolicy = notifyPolicy
+                    pending[pkg.packageName] = request
+                    executor.execute(request)
                 }
             }
         }
-        return PlayCategoryRules.exemption(installer, record?.category, selected)
+        return PlayCategoryRules.cachedCategory(record, pkg.firstInstallTime, pkg.lastUpdateTime)
     }
 
     private fun installer(c: Context, packageName: String): String? =
@@ -57,9 +92,17 @@ internal object PlayCategoryLookup {
     private fun fetchCategory(packageName: String): String? {
         // Package names are the only information sent. No account, device ID or usage data is sent.
         if (!Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+").matches(packageName)) return null
+        // Let Google use the device's network region first; a US-only lookup can miss local banks.
+        for (region in listOf("", "&gl=US")) {
+            fetchListingCategory(packageName, region)?.let { return it }
+        }
+        return null
+    }
+
+    private fun fetchListingCategory(packageName: String, region: String): String? {
         var connection: HttpURLConnection? = null
         return try {
-            connection = URL("https://play.google.com/store/apps/details?id=$packageName&hl=en&gl=US")
+            connection = URL("https://play.google.com/store/apps/details?id=$packageName&hl=en$region")
                 .openConnection() as HttpURLConnection
             connection.connectTimeout = 8_000
             connection.readTimeout = 8_000

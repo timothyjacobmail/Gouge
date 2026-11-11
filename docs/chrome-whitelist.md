@@ -10,6 +10,20 @@ Approved websites can load embedded Google reCAPTCHA, including the Enterprise w
 
 Website additions and domain Allow rules keep their normal task passwords and approval waits. Websites without a matching Allow rule still need a separate website approval.
 
+## Temporary links
+
+For a shared Instagram reel or another one-off page, share it to Install Lock and choose **Temporarily whitelist a link (1 day)**. You can also open **Chrome whitelist → Temporary links (1 day) → Add temporary link** and paste its full URL.
+
+Confirm the request using the existing **Add Chrome whitelist sites** task. It uses that task's saved password delay, including any longer imported wait; there is no second wait. When approval completes, Install Lock sends **Link available to view now**. Pending requests can be cancelled in **Pending tasks**. If notifications are disabled, enable them from Temporary links; the approved link remains available in that list.
+
+The approval waits in a ready state until you choose **Open in Chrome — start 1 day**. Its 24-hour access window then starts, and reopening never extends the original deadline. Expiry removes only that temporary approval, including after process death or reboot. Ready approvals survive reboot; pending task waits restart according to the existing task rules. Removing a ready or active link is immediate. A fresh request after expiry requires the normal delay again. Permanent approvals and independent Allow rules still apply separately.
+
+Only the approved page is permitted, including its content-identifying query parameters. Instagram share tracking (`igsh`, `igshid`), UTM tags and common click IDs are omitted; fragments and a trailing slash do not change the approved page. Reel IDs and path case are preserved. Native Instagram access is unchanged: links open explicitly in Chrome. Extra site locks, ordered Block rules, keywords, app locks, cooldowns and curfew still apply. Unlock Chrome through its existing controls if necessary before starting the link's timer.
+
+Browser accessibility must be connected for temporary approvals to take effect. Chrome receives HTTPS/HTTP, port and exact-host filters limited to the approved path and query; its policy uses path prefixes, so Install Lock's native address-bar monitor additionally checks the exact page and same-page navigation. See [Chromium's filter format](https://www.chromium.org/administrators/url-blocklist-filter-format/). Different redirect destinations, sign-in pages and other reels require their own approval. This is the existing Chrome/accessibility enforcement model, which can react after a page changes; it cannot guarantee no brief content flash.
+
+Validation on 2026-11-11: 356 JVM tests passed. Version 1.9 (code 13) was installed over the existing app on the connected Vivo phone, preserving device-owner enrollment. All 23 focused Android tests passed: four temporary-link tests, fifteen Chrome policy tests and four native-password tests. These cover saved approval, authentication, cancellation, notifications, expiry and policy boundaries; live Instagram playback was not tested.
+
 Live browser validation requires Chrome to be unlocked through the existing app controls. On the connected phone, Chrome was suspended and the browser accessibility service was off, so the live Protean widget could not be checked.
 
 Validation on 2026-11-02: all 298 JVM tests and 14 Chrome policy tests on the connected Vivo phone passed. The device check confirmed that saved domain Allow rules reached Android's actual Chrome restrictions without changing saved website approvals. The app and instrumentation APKs built and the updated app was installed.

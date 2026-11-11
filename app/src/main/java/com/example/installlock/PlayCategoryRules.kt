@@ -62,6 +62,11 @@ internal object PlayCategoryRules {
 
     fun validCategories(categories: Set<String>) = categories.intersect(knownCategories)
 
+    fun cachedCategory(record: PlayCategoryRecord?, installedAt: Long, updatedAt: Long): PlayInstallCategory? =
+        record?.takeIf { it.matches(installedAt, updatedAt) }?.let { saved ->
+            PlayInstallCategory.entries.firstOrNull { it.storeId == saved.category }
+        }
+
     fun exemption(installer: String?, storeCategory: String?, enabled: Set<String> = defaultCategories): PlayInstallCategory? =
         if (installer == PLAY_STORE && storeCategory in enabled)
             PlayInstallCategory.entries.firstOrNull { it.storeId == storeCategory } else null

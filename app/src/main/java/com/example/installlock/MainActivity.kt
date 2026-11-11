@@ -39,6 +39,9 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         internal const val ACTION_LOCK_REASONS = "com.example.installlock.LOCK_REASONS"
+        internal const val ACTION_PLAY_STORE_DELAY = "com.example.installlock.PLAY_STORE_DELAY_SETTINGS"
+        internal const val ACTION_BANKING_MODE = "com.example.installlock.BANKING_MODE"
+        internal const val ACTION_REDDIT = "com.example.installlock.REDDIT_ALLOWLIST"
         private val shareLinkExecutor = Executors.newSingleThreadExecutor()
         private val credentialExecutor = Executors.newSingleThreadExecutor()
     }
@@ -85,6 +88,7 @@ class MainActivity : AppCompatActivity() {
         button("Chrome whitelist") { goTo { showChromeSites() } },
         button("Extra locked sites") { goTo { showExtraLockedSites() } },
         button("Browser & Google keyword filter") { goTo { showBrowserKeywords() } },
+        button("Reddit subreddit allowlist") { goTo { showRedditAllowlist() } },
         button("Google VPN filter") { goTo { showGoogleFilter() } },
         button("Start a new Google search") { startActivity(GoogleSearchRecoveryActivity.openIntent(this)) })
 
@@ -98,6 +102,7 @@ class MainActivity : AppCompatActivity() {
             label("Checked at " + DateFormat.getTimeInstance().format(Date())),
             button("Refresh") { reopen() },
             section("Recovery options", "Settings and filters that can keep an app locked",
+            button("Banking mode") { goTo { showBankingMode() } },
             button("Android accessibility settings") {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             },
@@ -170,7 +175,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         readSharedSite(intent)
         window.setDecorFitsSystemWindows(false)   // consistent edge-to-edge; show() adds the padding
-        if (Policy.isOwner(this)) LockService.start(this)
+        if (Policy.isOwner(this) && savedInstanceState == null) BatteryProtection.request(this)
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT
@@ -202,11 +207,27 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        EnforcementRecovery.recover(this)
         statusUpdatesActive = true
         if (!openNotificationScreen()) render()
     }
 
     private fun openNotificationScreen(): Boolean {
+        if (intent.action == ACTION_PLAY_STORE_DELAY) {
+            intent = Intent()
+            goTo { showPlayStoreDelaySettings() }
+            return true
+        }
+        if (intent.action == ACTION_REDDIT) {
+            intent = Intent()
+            goTo { showRedditAllowlist() }
+            return true
+        }
+        if (intent.action == ACTION_BANKING_MODE) {
+            intent = Intent()
+            goTo { showBankingMode() }
+            return true
+        }
         if (intent.action != ACTION_LOCK_REASONS) return openDelayedNotification()
         intent = Intent()
         // This read-only screen grants no task authorization.
@@ -332,6 +353,142 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------- main screens ----------
+
+    private fun showBankingMode() {
+        Policy.sweep(this)
+        val status = label("")
+        val message = label("")
+        val financeDetection = CheckBox(this).apply {
+            text = "Auto-detect Finance apps from Google Play"
+            isChecked = BankingAppStore.detectFinance(this@MainActivity)
+        }
+        if (BankingAppStore.detectFinance(this)) BankingCategoryDiscovery.refresh(this, force = true)
+        val categoryStatus = label("")
+        val selected = BankingAppStore.manualBanks(this).toMutableSet()
+        val excluded = BankingAppStore.excluded(this)
+        val apps = packageManager.getInstalledApplications(0).filter {
+            it.packageName !in excluded && packageManager.getLaunchIntentForPackage(it.packageName) != null
+        }.sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        val names = apps.associate { it.packageName to it.loadLabel(packageManager).toString() }
+        val choices = apps.map { app -> CheckBox(this).apply {
+            text = names[app.packageName]
+            isChecked = app.packageName in selected
+            setOnCheckedChangeListener { _, checked ->
+                if (checked) selected.add(app.packageName) else selected.remove(app.packageName)
+            }
+        } }
+        val listRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rows = mutableMapOf<String, Pair<TextView, Button>>()
+        var lastApps: Set<String>? = null
+        fun refreshStatus() {
+            val discovery = BankingCategoryDiscovery.snapshot()
+            categoryStatus.text = "Finance apps detected: ${discovery.finance.size}. " +
+                "Play categories verified: ${discovery.verified}/${discovery.total}. Initial checks need internet."
+            apps.forEachIndexed { index, app ->
+                val box = choices[index]
+                val detected = financeDetection.isChecked && app.packageName in discovery.finance
+                box.setOnCheckedChangeListener(null)
+                val title = names[app.packageName] + if (detected) " - Finance (Play Store)" else ""
+                if (box.text.toString() != title) box.text = title
+                box.isChecked = detected || app.packageName in selected
+                box.isEnabled = !detected
+                box.setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected.add(app.packageName) else selected.remove(app.packageName)
+                }
+            }
+            val effective = BankingAppStore.targets(this)
+            if (effective != lastApps) {
+                lastApps = effective
+                rows.clear()
+                listRows.removeAllViews()
+                val available = apps.filter { it.packageName in effective }
+                if (available.isEmpty()) listRows.addView(label("Detected Finance apps and saved manual additions appear here."))
+                available.forEach { app ->
+                    val wait = label("")
+                    val open = button("Open ${names[app.packageName]}") { openBankingApp(app.packageName) }
+                    rows[app.packageName] = wait to open
+                    listRows.addView(wait)
+                    listRows.addView(open)
+                }
+            }
+            val waits = BankingAppStore.waits(this)
+            val now = System.currentTimeMillis()
+            rows.forEach { (app, views) ->
+                val left = ((waits[app] ?: 0) - now).coerceAtLeast(0)
+                val seconds = (left + 999) / 1000
+                views.first.text = if (left > 0) "${names[app]}: waiting ${seconds / 60}m ${seconds % 60}s"
+                    else "${names[app]}: list wait complete. Other app locks still apply."
+                views.second.isEnabled = left == 0L
+            }
+            status.text = when {
+                !BankingMode.active(this) -> "Accessibility is controlled manually. Turn it off before banking and back on afterward."
+                BankingMode.servicesStillEnabled(this) -> "Waiting for Install Lock accessibility to switch off. " +
+                    "If needed, switch off its services in Android accessibility settings."
+                else -> "Install Lock accessibility is off. It stays off until you manually turn it back on."
+            }
+        }
+        refreshStatus()
+        screen(label("Banking mode", 24f), status,
+            label("Use the button below to turn Install Lock accessibility off or back on. Opening or closing an app does not change it."),
+            label("New banking/Finance list entries wait 15 minutes before the app can open. " +
+                "Changing accessibility, using a temporary app password or removing an entry cannot skip a running wait. " +
+                "Entries already on your list keep their eligibility."),
+            label("Finance apps are detected from Play Store categories. Add missing apps manually. " +
+                "The list updates without switching accessibility."),
+            label("Browsers and monitored feeds stay locked while accessibility is off. Focus lock, curfew and other app locks continue."),
+            primaryButton(if (BankingMode.active(this)) "Turn accessibility back on" else "Turn accessibility off for banking") {
+                if (BankingMode.active(this)) {
+                    val result = BankingMode.finish(this)
+                    reopen()
+                    toast(result)
+                } else {
+                    val error = BankingMode.start(this)
+                    if (error == null) reopen() else message.text = error
+                }
+            }.apply { isEnabled = Policy.isOwner(this@MainActivity) },
+            label(if (BackgroundPowerProtection.canMaintainGuard(this))
+                "Turning accessibility back on restores the Install Lock services enabled before banking."
+                else "After finishing banking, re-enable Install Lock services manually in Android accessibility settings."),
+            section("Banking/Finance list", "New entries wait 15 minutes", listRows),
+            section("List settings", "Finance detection and manual additions",
+                financeDetection, categoryStatus,
+                button("Refresh Play Store categories") { BankingCategoryDiscovery.refresh(this, force = true) },
+                section("Additional banking apps", "Save changes to start the wait for new entries", *choices.toTypedArray()),
+                button("Save banking list") {
+                    val error = BankingAppStore.configure(this, selected.toSet(), financeDetection.isChecked)
+                    if (error == null) { reopen(); toast("Banking list saved. New entries wait 15 minutes.") }
+                    else message.text = error
+                }),
+            message,
+            button("Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+            button("Why apps are locked") { goTo { showLockReasons() } },
+            button("Refresh") { reopen() }, button("Back") { back() })
+        status.postDelayed(object : Runnable {
+            override fun run() {
+                if (statusUpdatesActive && status.isAttachedToWindow && !isFinishing && !isDestroyed) {
+                    refreshStatus()
+                    status.postDelayed(this, 1000)
+                }
+            }
+        }, 1000)
+    }
+
+    private fun openBankingApp(app: String) {
+        Policy.sweep(this)
+        if (app !in BankingAppStore.targets(this)) { toast("Save this app in the banking list first."); return }
+        if ((BankingAppStore.waits(this)[app] ?: 0) > System.currentTimeMillis()) {
+            toast("This app is still in its 15-minute banking-list wait.")
+            return
+        }
+        if (BankingMode.servicesStillEnabled(this)) { toast("Turn accessibility off manually before opening the bank."); return }
+        if (Policy.dpm(this).isPackageSuspended(Policy.admin(this), app)) {
+            toast("Another app lock is active. Check Why apps are locked.")
+            return
+        }
+        val launch = packageManager.getLaunchIntentForPackage(app)
+        if (launch == null) { toast("This banking app is not available."); return }
+        try { startActivity(launch) } catch (_: RuntimeException) { toast("Android could not open this app."); }
+    }
 
     private fun focusActions() = section("Focus lock", "Lock distracting apps for a duration you choose",
         button("Start or view focus lock") { goTo { showFocusLock() } })
@@ -529,12 +686,15 @@ class MainActivity : AppCompatActivity() {
         val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), label("Install Lock", 26f),
             label("Confirm a sensitive change to apply it after its saved password delay."),
             button("Pending tasks") { goTo { showScheduledTasks() } },
-            button("Delayed Secrets") { startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java)) },
+            button("Personal secret vault (optional)") { startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java)) },
             button("Why apps are locked") { goTo { showLockReasons() } },
+            button(if (BankingMode.active(this)) "Banking mode - accessibility off" else "Banking mode") { goTo { showBankingMode() } },
             curfewActions(),
             focusActions(),
             watchdogActions(),
             section("Apps", "App access, locks and Play Store categories",
+                button("Open Play Store") { startActivity(PlayStoreDelayActivity.openIntent(this)) },
+                button("Play Store opening delay") { goTo { showPlayStoreDelaySettings() } },
                 button("Play Store immediate access") { goTo { showPlayStoreCategories() } },
                 button("Temporarily unlock one app") { goTo { showAppAccess() } },
                 button("App locks") { goTo { showAppPicker() } },
@@ -549,7 +709,12 @@ class MainActivity : AppCompatActivity() {
                 button("Task passwords") { goTo { showTaskPasswords() } },
                 button("About & licenses") { goTo { showAbout() } }),
             section("Protection status", "Other protections continue during temporary app access",
-                label(unlockStatus()), label(chromeLockExplanation(Policy.lockStatuses(this))), label(playAccessSummary())))
+                label(unlockStatus()), label(chromeLockExplanation(Policy.lockStatuses(this))), label(playAccessSummary()),
+                label(if (BatteryProtection.exempt(this)) "Battery optimization is disabled for Install Lock."
+                    else "Battery optimization can interrupt background protection. Disable it for Install Lock."),
+                label(BackgroundPowerProtection.summary(this)),
+                button("Disable battery optimization") { BatteryProtection.request(this) }
+                    .apply { visibility = if (BatteryProtection.exempt(this@MainActivity)) View.GONE else View.VISIBLE }))
         val search = EditText(this).apply {
             hint = "Search settings and tasks"
             inputType = InputType.TYPE_CLASS_TEXT
@@ -591,14 +756,20 @@ class MainActivity : AppCompatActivity() {
     private data class SearchDestination(val title: String, val keywords: String, val open: () -> Unit)
 
     private fun searchDestinations(): List<SearchDestination> = buildList {
-        add(SearchDestination("Delayed Secrets", "password vault reveal unlock copy import delay") {
+        add(SearchDestination("Personal secret vault", "password vault reveal unlock copy import delay") {
             startActivity(Intent(this@MainActivity, com.example.delayedsecrect.MainActivity::class.java))
         })
         add(SearchDestination("Pending tasks", "scheduled changes countdown cancel") { showScheduledTasks() })
+        add(SearchDestination("Play Store opening delay", "playstore password delay change disable turn off minutes settings") { showPlayStoreDelaySettings() })
+        add(SearchDestination("Open Play Store (2-minute wait)", "apps playstore shop store opening launch delay countdown") {
+            startActivity(PlayStoreDelayActivity.openIntent(this@MainActivity))
+        })
         add(SearchDestination("Why apps are locked", "status reasons protection blocked recovery") { showLockReasons() })
+        add(SearchDestination("Banking mode", "bank finance payment accessibility disable pause resume restore services") { showBankingMode() })
         add(SearchDestination("Night curfew", "night bedtime schedule appeal apps") { showCurfew() })
         add(SearchDestination("Focus lock", "focus distracting apps timer session") { showFocusLock() })
         add(SearchDestination("Browsing & scrolling watchdog", "manga comics website categories rapid feeds cooldown") { showCategoryWatchdog() })
+        add(SearchDestination("Reddit subreddit allowlist", "reddit communities whitelist allowed revanced mods clients reinstall") { showRedditAllowlist() })
         add(SearchDestination("Play Store immediate access", "apps games category categories whitelist exemptions install change " +
             PlayInstallCategory.entries.joinToString(" ") { it.displayName }) { showPlayStoreCategories() })
         add(SearchDestination("Temporary app access", "unlock apps duration timer lock protected apps now") { showAppAccess() })
@@ -607,6 +778,7 @@ class MainActivity : AppCompatActivity() {
         add(SearchDestination("Prevent uninstall & force stop", "apps uninstall protection remove force stop clear data") { showNoUninstallPicker() })
         add(SearchDestination("Ordered domain rules", "browser website block allow reorder move domain") { showDomainRules() })
         add(SearchDestination("Chrome whitelist", "browser website site whitelist password delay turn off on") { showChromeSites() })
+        add(SearchDestination("Temporary link whitelist", "instagram reel shared link temporary one day 1d notification") { showTemporaryLinks() })
         add(SearchDestination("Judge", "website classify immediate leisure content") { startActivity(JudgeActivity.openIntent(this@MainActivity)) })
         add(SearchDestination("Add a whitelist site", "chrome browser website allow add whitelist") { showAddSite() })
         add(SearchDestination("Extra locked sites", "browser chrome website block remove") { showExtraLockedSites() })
@@ -840,6 +1012,7 @@ class MainActivity : AppCompatActivity() {
                                 "in Google app → Settings → General and share again."
                     }
                     sharedSiteOptions = options
+                    if (resolvedOptions.isNotEmpty()) sharedSiteText = resolved
                     swapTo { showAddSite(options.firstOrNull().orEmpty(), options, notice) }
                 }
             }
@@ -905,7 +1078,12 @@ class MainActivity : AppCompatActivity() {
         col.addView(label("Path checks stay active when a site changes pages without reloading. Keep Install Lock's accessibility service connected."))
         col.addView(button("Extra locked sites") { goTo { showExtraLockedSites() } })
         col.addView(button("Pending tasks") { goTo { showScheduledTasks() } })
+        col.addView(button("Temporary links (1 day)") { goTo { showTemporaryLinks() } })
         col.addView(lockBtn)
+        val linkedReddit = RedditStore.chromePatterns(this)
+        if (linkedReddit.isNotEmpty()) col.addView(section("Linked Reddit communities", "Available after their Reddit approval wait",
+            *linkedReddit.map { label(it) }.toTypedArray(),
+            button("Manage linked subreddits") { goTo { showRedditAllowlist() } }))
         val domainAllows = Store.domainRules(this).withIndex().filter { it.value.action == DomainAction.ALLOW }
         if (domainAllows.isNotEmpty()) col.addView(section("Linked Allow domain rules", "Rule order and extra site locks still apply",
             *domainAllows.map { label("#${it.index + 1} ${it.value.description}") }.toTypedArray(),
@@ -957,6 +1135,12 @@ class MainActivity : AppCompatActivity() {
         views.addAll(listOf(
             label(if (choices != null) "Selected address (editable)" else "Website address"),
             site, msg,
+            button("Temporarily whitelist a link (1 day)") {
+                // Keep the original shared query; the permanent path picker deliberately omits it.
+                val original = if (initialSite.isNotEmpty() && site.text.toString() == initialSite)
+                    SharedSite.temporaryLink(sharedSiteText) else null
+                goTo { showAddTemporaryLink(original ?: site.text.toString()) }
+            },
             button("Judge for immediate access") {
                 val selected = site.text.toString()
                 if (JudgeRules.webUri(selected) == null) {
@@ -977,6 +1161,66 @@ class MainActivity : AppCompatActivity() {
             },
             button("Done") { back() }
         ))
+        screen(*views.toTypedArray())
+    }
+
+    private fun showAddTemporaryLink(initialUrl: String = "") {
+        val address = EditText(this).apply {
+            hint = "https://www.instagram.com/reel/example/"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setText(initialUrl)
+        }
+        val msg = errorLabel()
+        screen(label("Temporary link whitelist", 22f),
+            label("Use the normal whitelist password and approval delay for this link. " +
+                "When the wait ends, a notification tells you it is available. " +
+                "Open it from the notification or Temporary links to start 1 day of access. " +
+                "The approval then expires automatically. Reopening does not extend it."),
+            label("Paste the full link. This approves one page in Chrome; query parameters identifying content are retained. " +
+                "It does not unlock the Instagram app or other pages. Other locks still apply."),
+            address, msg,
+            primaryButton("Request temporary access") {
+                val url = TemporaryLinkRules.normalize(address.text.toString())
+                when {
+                    url == null -> msg.text = "Enter a full HTTP or HTTPS link without URL credentials."
+                    TemporaryLinks.all(this).any { it.url == url } -> msg.text = "This link is already in Temporary links."
+                    else -> confirmTask(TaskScope(TaskKind.WHITELIST_ADD), "Temporary link: $url (1 day after opening)",
+                        mapOf("temporary" to true, "url" to url))
+                }
+            },
+            button("Temporary links") { goTo { showTemporaryLinks() } },
+            button("Back") { back() })
+    }
+
+    private fun showTemporaryLinks() {
+        val links = TemporaryLinks.all(this)
+        val views = mutableListOf<View>(label("Temporary links", 22f),
+            label("Ready links start their 1-day timer when you open them here or from their notification. " +
+                "Expired links are removed automatically. Pending requests are in Pending tasks."))
+        if (!TemporaryLinks.notificationsEnabled(this)) {
+            views.add(label("Notifications are off. Enable them to receive the link-ready alert; approved links are also available here."))
+            views.add(button("Enable link notifications") {
+                startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+            })
+        }
+        if (links.isEmpty()) views.add(label("No ready or active temporary links."))
+        links.forEach { link ->
+            val status = if (link.ready) "Ready to open — 1 day starts on opening" else
+                "Expires ${DateFormat.getDateTimeInstance().format(Date(link.expiresWall))}"
+            views.add(UiStyle.card(this, label(link.url, 18f), label(status),
+                button(if (link.ready) "View ready link" else "View active link") {
+                    startActivity(TemporaryLinks.openIntent(this, link.id))
+                }, button("Remove link") {
+                    TemporaryLinks.remove(this, link.id)
+                    Policy.syncChrome(this)
+                    ScheduledTasks.reschedule(this)
+                    reopen()
+                }))
+        }
+        views.add(primaryButton("Add temporary link") { goTo { showAddTemporaryLink() } })
+        views.add(button("Pending tasks") { goTo { showScheduledTasks() } })
+        views.add(button("Refresh") { reopen() })
+        views.add(button("Back") { back() })
         screen(*views.toTypedArray())
     }
 
@@ -1042,6 +1286,144 @@ class MainActivity : AppCompatActivity() {
             })
         }
         views.add(button("Back") { back() })
+        screen(*views.toTypedArray())
+    }
+
+    // ---------- Reddit communities ----------
+
+    private fun showRedditAllowlist() {
+        RedditStore.discover(this)
+        val enabled = RedditStore.enabled(this)
+        val allowed = RedditStore.allowed(this)
+        val clients = RedditStore.targets(this).filter { packageManager.getLaunchIntentForPackage(it) != null }.sorted()
+        fun clientName(pkg: String) = try { packageManager.getApplicationInfo(pkg, 0).loadLabel(packageManager).toString() }
+            catch (_: Exception) { pkg }
+        val clientPicker = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                clients.map { "${clientName(it)} ($it)" }.ifEmpty { listOf("No Reddit client installed") })
+        }
+        val input = EditText(this).apply {
+            hint = "r/AskReddit or a Reddit community URL"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine(true)
+        }
+        val msg = errorLabel()
+        val views = mutableListOf<View>(label("Reddit subreddit allowlist", 24f),
+            label(if (enabled) "Enabled · ${allowed.size} allowed communities" else "Not enabled"),
+            label("Only verified allowed communities can be viewed in protected Reddit apps. Mixed feeds, profiles, search, " +
+                "and screens whose community cannot be verified are covered. Use the community buttons below to open Reddit directly."),
+            label("Rules are saved in Install Lock and survive uninstalling, clearing data, or reinstalling a Reddit client. " +
+                "Sign in before enabling protection; login screens are also restricted."),
+            label("Approved communities also become Chrome whitelist paths when their approval wait finishes. " +
+                "Removing a community removes its linked Chrome permission. Existing website blocks and app locks still apply."),
+            button(if (enabled) "Turn Reddit protection off (delayed task)" else "Enable Reddit protection") {
+                when {
+                    enabled -> confirmTask(TaskScope(TaskKind.REDDIT_OFF), "Turn off Reddit subreddit protection")
+                    !TaskPasswords.ready(this) -> goTo { showTaskSetup() }
+                    !RedditStore.credentialsReady(this) -> goTo { showRedditCredentialSetup() }
+                    RedditStore.enable(this) -> {
+                        RedditStore.invalidate(); RedditStore.discover(this); Policy.sweep(this); LockService.start(this); reopen()
+                    }
+                    else -> msg.text = "Could not save Reddit protection."
+                }
+            },
+            section("Add an allowed community", "Adding access uses its saved password delay", input,
+                button("Add subreddit (delayed task)") {
+                    val name = RedditRules.normalize(input.text.toString())
+                    when {
+                        name == null -> msg.text = "Enter one community name or a reddit.com/r/community URL. Combined feeds and r/all are not allowed."
+                        name in allowed -> msg.text = "r/$name is already allowed."
+                        !RedditStore.credentialsReady(this) -> goTo { showRedditCredentialSetup() }
+                        else -> confirmTask(TaskScope(TaskKind.REDDIT_ALLOW), "Allow r/$name in protected Reddit apps", mapOf("subreddit" to name))
+                    }
+                }), msg,
+            label("Open communities with", 18f), clientPicker)
+        if (allowed.isEmpty()) views.add(label("No communities are allowed. Enabling protection with an empty list blocks Reddit content."))
+        for (name in allowed.sorted()) views.add(section("r/$name", "Allowed community",
+            button("Open r/$name in Chrome") {
+                try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.reddit.com/r/$name/")).setPackage(Policy.CHROME)) }
+                catch (_: RuntimeException) { toast("Chrome is not available.") }
+            },
+            button("Open r/$name") {
+                val pkg = clients.getOrNull(clientPicker.selectedItemPosition)
+                if (pkg == null) toast("Install Reddit or register a Reddit client first.")
+                else try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.reddit.com/r/$name/")).setPackage(pkg)) }
+                catch (_: RuntimeException) { toast("This client could not open the community link.") }
+            }, button("Remove r/$name immediately") {
+                RedditStore.removeAllowed(this, name); Policy.sweep(this); reopen()
+            }))
+        val clientRows = RedditStore.targets(this).sorted().map { pkg ->
+            val status = if (pkg in clients) "Installed" else "Remembered · applies when installed"
+            val rows = mutableListOf<View>(label(pkg, 12f), label(status))
+            if (pkg in RedditStore.manualClients(this) && pkg !in RedditStore.detected(this) && pkg != RedditRules.OFFICIAL)
+                rows.add(button("Remove custom client (delayed task)") {
+                    confirmTask(TaskScope(TaskKind.REDDIT_OFF), "Stop subreddit protection for $pkg",
+                        mapOf("action" to "removeClient", "package" to pkg))
+                })
+            section(clientName(pkg), status, *rows.toTypedArray())
+        }
+        views.add(section("Protected Reddit clients", "Official Reddit, detected mods and saved custom clients", *clientRows.toTypedArray()))
+        views.add(button("Register a custom Reddit client") { goTo { showRedditClientPicker() } })
+        views.add(section("Monitoring", if (BrowserKeywordService.isReady(this)) "Accessibility connected" else "Accessibility disconnected",
+            label("When protection is enabled, these clients stay suspended while accessibility is unavailable, including during banking mode. " +
+                "App unlock passwords cannot bypass this. Existing install waits and other locks still apply."),
+            label("Mods are discovered from Reddit package/app names, Reddit-specific link handlers, and preserved official resources. " +
+                "Register a fully renamed client manually. Layouts that do not expose a recognizable native community header remain blocked. " +
+                "Arbitrary mods can hide or falsify their identity, so compatibility with every modified app cannot be guaranteed."),
+            button("Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }))
+        views.add(button("Refresh clients") { RedditStore.invalidate(); RedditStore.discover(this); Policy.sweep(this); reopen() })
+        views.add(button("Back") { back() })
+        screen(*views.toTypedArray())
+    }
+
+    private fun showRedditClientPicker() {
+        val apps = packageManager.getInstalledApplications(0).filter { RedditStore.validClient(this, it.packageName) }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        val picker = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                apps.map { "${it.loadLabel(packageManager)} (${it.packageName})" })
+        }
+        val msg = errorLabel()
+        screen(label("Register a Reddit client", 22f),
+            label("Choose your modified Reddit app. Its package stays registered after uninstall and reinstall. " +
+                "Unsupported screens in that app will be covered while Reddit protection is enabled."), picker, msg,
+            primaryButton("Protect selected client") {
+                val pkg = apps.getOrNull(picker.selectedItemPosition)?.packageName
+                if (pkg == null || !RedditStore.addClient(this, pkg)) msg.text = "Could not register this app."
+                else { Policy.sweep(this); LockService.start(this); back() }
+            }, button("Back") { back() })
+    }
+
+    private fun showRedditCredentialSetup() {
+        if (!TaskPasswords.ready(this)) { showTaskSetup(); return }
+        val scopes = RedditRules.credentialKinds.map { TaskScope(it) }.filterNot { TaskPasswords.has(this, it) }
+        if (scopes.isEmpty()) { showRedditAllowlist(); return }
+        val fields = scopes.associateWith { passwordField("New task password") to passwordField("Confirm password") }
+        val sharing = CheckBox(this).apply { text = "I explicitly accept sharing if I choose matching passwords" }
+        val show = CheckBox(this).apply {
+            text = "Show new passwords so I can save them"
+            setOnCheckedChangeListener { _, visible -> fields.values.forEach { pair ->
+                pair.first.transformationMethod = if (visible) null else android.text.method.PasswordTransformationMethod.getInstance()
+                pair.second.transformationMethod = if (visible) null else android.text.method.PasswordTransformationMethod.getInstance()
+            } }
+        }
+        val msg = errorLabel()
+        val views = mutableListOf<View>(label("Set up Reddit task passwords", 22f),
+            label("Set these first passwords before enabling Reddit protection. Existing task passwords cannot be replaced here. " +
+                "Passwords are saved securely in Install Lock automatically. Adding communities or relaxing protection uses the task confirmation delay."),
+            button("Generate separate passwords") { fields.forEach { (scope, pair) ->
+                val value = TaskVault.generatePassword(scope); pair.first.setText(value); pair.second.setText(value)
+            } })
+        fields.forEach { (scope, pair) -> views.add(section(scope.title, "First setup only", pair.first, pair.second, initiallyExpanded = true)) }
+        views.addAll(listOf(show, sharing, msg, primaryButton("Save Reddit task passwords") {
+            val invalid = fields.any { (_, pair) -> pair.first.text.toString() != pair.second.text.toString() || !Store.isValidNewPassword(pair.first.text.toString()) }
+            if (invalid) msg.text = "Use matching passwords with 8+ characters, a letter and a number."
+            else {
+                val items = fields.map { (scope, pair) -> NewTaskPassword(scope, pair.first.text.toString()) }
+                val share = sharing.isChecked
+                taskJob(msg, { TaskPasswords.setupReddit(this, items, share) }) { swapTo { showRedditAllowlist() } }
+            }
+        }, button("Back") { back() }))
         screen(*views.toTypedArray())
     }
 
@@ -1388,6 +1770,34 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- category and timing settings ----------
 
+    private fun showPlayStoreDelaySettings() {
+        if (!TaskPasswords.ready(this)) { showTaskSetup(); return }
+        val scope = TaskScope(TaskKind.PLAY_STORE_DELAY)
+        val value = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            hint = "Opening wait in minutes (0 turns it off)"
+            setText(PlayStoreDelayStore.minutes(this@MainActivity).toString())
+        }
+        val msg = errorLabel()
+        val save = primaryButton("Confirm opening-delay change") {
+            val minutes = value.text.toString().toIntOrNull()
+            if (minutes !in 0..10080) { value.error = "Enter 0 to 10080 minutes."; return@primaryButton }
+            confirmTask(scope, if (minutes == 0) "Turn off Play Store opening delay" else "Set Play Store opening delay to $minutes minutes",
+                mapOf("minutes" to minutes!!))
+        }.apply { isEnabled = false }
+        screen(label("Play Store opening delay", 22f),
+            label("Current opening wait: ${PlayStoreDelayStore.minutes(this)} minutes. A separate delayed password protects changes, including turning the wait off."),
+            label("Confirming a change starts this password's 2-minute delay. The change applies automatically when it finishes."),
+            value, msg, save,
+            button("Delayed Secrets") { startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java)) },
+            button("Change this task password") { goTo { showTaskPasswordEditor(scope) } },
+            button("Back") { back() })
+        taskJob(msg, { TaskPasswords.setupPlayStoreDelay(this) }) {
+            msg.text = "Separate password configured with a 2-minute delay. It is saved in Delayed Secrets."
+            save.isEnabled = true
+        }
+    }
+
     private fun showPlayStoreCategories() {
         val selectedCategories = Store.immediatePlayCategories(this)
         val boxes = PlayInstallCategory.entries.associateWith { category -> CheckBox(this).apply {
@@ -1440,7 +1850,7 @@ class MainActivity : AppCompatActivity() {
             label("Each Save button opens a confirmation. The change applies after its saved password delay."),
             section("Durations and waiting periods", "Timing password only; app-specific limits also apply",
                 *timingViews(editable.filterNot { it in TaskSettings.security }),
-                label("Task modification delays come from their saved passwords in Delayed Secrets. Whitelist additions use one wait only."),
+                label("Task confirmation delay is configured here. Whitelist additions use one wait only. Imported passwords retain longer existing waits."),
                 label("Unlock presets"), presets,
                 label("An app's own access limit still applies even if you increase the global maximum. Extra locked sites keep their fixed 45-minute removal wait."),
                 button("Fill default timing values") {
@@ -1517,49 +1927,58 @@ class MainActivity : AppCompatActivity() {
 
     private fun showTaskConfirmation(task: DelayedTask, scope: TaskScope) {
         val msg = errorLabel()
-        val picker = Spinner(this)
-        val explanation = label("Finding the saved password for this task…")
+        val explanation = label("Checking this task's native password...")
+        val upgradePassword = passwordField("Current task password (one-time upgrade)")
         var choices = emptyList<com.example.delayedsecrect.InlineSecretChoice>()
-        val confirm = primaryButton("Confirm this task") {
-            val secret = choices.getOrNull(picker.selectedItemPosition) ?: return@primaryButton
+        var recoverSubredditPassword = false
+        val upgrade = button("Save current password in Install Lock") {
+            val value = upgradePassword.text.toString()
             taskJob(msg, {
-                try { ScheduledTasks.confirm(this, task, secret.id); null }
+                if (ScheduledTasks.attachExisting(this, scope, value)) null
+                else "Wrong current task password, or the task/password is locked. Existing passwords cannot be reset here."
+            }) { upgradePassword.setText(""); reopen() }
+        }
+        val confirm = primaryButton("Confirm this task") {
+            val choice = choices.singleOrNull()
+            if (choice == null && !recoverSubredditPassword) return@primaryButton
+            taskJob(msg, {
+                try {
+                    if (recoverSubredditPassword) ScheduledTasks.confirmSubredditRecovery(this, task)
+                    else ScheduledTasks.confirm(this, task, choice!!.id)
+                    null
+                }
                 catch (e: IllegalStateException) { e.message ?: "Could not schedule this task." }
             }) {
                 LockService.start(this)
                 swapTo { showScheduledTasks() }
             }
         }.apply { isEnabled = false }
+        upgradePassword.visibility = View.GONE
+        upgrade.visibility = View.GONE
         screen(label(task.title, 22f),
-            label("Confirm once to start the saved password's delay. This exact change applies automatically when the wait ends, even after leaving this screen."),
-            explanation, picker, msg, confirm,
-            button("Delayed Secrets") {
-                startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java))
-            },
-            label("Unlocking or copying a password separately does not confirm this task or shorten its wait."),
-            button("Manage / import saved secrets") {
-                startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java))
-            },
-            button("Refresh saved passwords") { reopen() },
+            label("Confirm once to start this task's delay. The exact change applies automatically when the wait ends, even after leaving this screen. Passwords are managed securely inside Install Lock."),
+            explanation, upgradePassword, upgrade, msg, confirm,
+            button("Task passwords") { goTo { showTaskPasswords() } },
             button("Cancel") { back() })
         taskJob(msg, { choices = ScheduledTasks.choices(this, scope); null }) {
             msg.text = ""
-            picker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-                choices.map { "${it.name} (${it.delayMinutes} min)" })
-            confirm.isEnabled = choices.isNotEmpty()
-            picker.visibility = if (choices.size > 1) View.VISIBLE else View.GONE
-            explanation.text = when (choices.size) {
-                0 -> "Save this task's password in Delayed Secrets first, then return and try again. A matching saved secret is required."
-                1 -> "${choices.single().name}: applies ${choices.single().delayMinutes} minutes after confirmation."
-                else -> "Several saved secrets match. Choose the password delay to use for this task."
-            }
+            recoverSubredditPassword = choices.isEmpty() && ScheduledTasks.canRecoverSubredditPassword(this, scope)
+            confirm.isEnabled = choices.isNotEmpty() || recoverSubredditPassword
+            confirm.text = if (recoverSubredditPassword) "Confirm subreddit and recover password" else "Confirm this task"
+            upgradePassword.visibility = if (choices.isEmpty() && !recoverSubredditPassword) View.VISIBLE else View.GONE
+            upgrade.visibility = upgradePassword.visibility
+            explanation.text = choices.singleOrNull()?.let {
+                "Applies ${it.delayMinutes} minutes after confirmation. No password copying or separate vault is needed."
+            } ?: if (recoverSubredditPassword) "You do not need the old password. Confirm to start a one-time recovery wait of at least ${maxOf(15, NativeTaskPasswords.delay(this, scope))} minutes. " +
+                "When it ends, Install Lock saves a new password automatically and allows only this requested subreddit in Reddit and Chrome. There is no second wait. Existing rules stay active during recovery."
+            else "Enter this task's current password once to store it natively. Existing passwords and protections stay in effect."
         }
     }
-
     private fun showScheduledTasks() {
         val entries = ScheduledTasks.all(this)
         val views = mutableListOf<View>(label("Pending tasks", 22f),
             label("Changes apply automatically after their saved password delay. Cancelling stops only the selected task. After a device reboot, pending waits restart."))
+        views.add(button("Ready and active temporary links") { goTo { showTemporaryLinks() } })
         val statuses = mutableMapOf<String, Pair<TextView, Button>>()
         if (entries.isEmpty()) views.add(label("No scheduled tasks."))
         entries.forEach { entry ->
@@ -1651,6 +2070,7 @@ class MainActivity : AppCompatActivity() {
             label("Each password works for one task. There is no master override or password reset using the main password. " +
                 "Changing a task password requires its current password. Sharing happens only if you explicitly allow matching passwords."),
             button("Temporary app access") { goTo { showAppAccess() } })
+        if (!RedditStore.credentialsReady(this)) views.add(button("Set up Reddit task passwords") { goTo { showRedditCredentialSetup() } })
         val scopes = (TaskPasswords.scopes(this) + TaskPasswords.required(this)).map { it to taskName(it) }.sortedBy { it.second }
         for ((scope, name) in scopes) {
             if (TaskPasswords.has(this, scope)) views.add(section(name, "Password configured",

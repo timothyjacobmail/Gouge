@@ -21,8 +21,14 @@ internal data class DelayedTask(val scope: String, val title: String, val detail
             TaskKind.APP_LIMIT -> TaskPasswords.setLimit(c, task.app, d.getInt("minutes"), password)
             TaskKind.APP_REMOVE -> Store.removeAppLock(c, task.app, password).also { if (it) Policy.release(c, listOf(task.app)) }
             TaskKind.WHITELIST_OFF -> Policy.setChromeLock(c, false, password)
+            TaskKind.REDDIT_ALLOW -> RedditStore.addAllowed(c, d.getString("subreddit"), password)
+            TaskKind.REDDIT_OFF -> if (d.optString("action") == "removeClient")
+                RedditStore.removeClient(c, d.getString("package"), password) else RedditStore.disable(c, password)
             // This path has already waited for its saved password; never start a second site timer.
-            TaskKind.WHITELIST_ADD -> run { Store.addSite(c, d.getString("site"), waitMs = 0).also { if (it) Policy.syncChrome(c) } }
+            TaskKind.WHITELIST_ADD -> run {
+                if (d.optBoolean("temporary")) TemporaryLinks.approve(c, d.getString("url"))
+                else Store.addSite(c, d.getString("site"), waitMs = 0).also { if (it) Policy.syncChrome(c) }
+            }
             TaskKind.KEYWORD_OFF -> Store.disableBrowserKeywordFilter(c, password)
             TaskKind.VPN_OFF -> Policy.disableGoogleFilter(c, password)?.startsWith("Error:") == false
             TaskKind.SCREENSHOTS_ALLOW -> Policy.setScreenCaptureBlocked(c, false, password)?.startsWith("Error:") == false
@@ -46,6 +52,7 @@ internal data class DelayedTask(val scope: String, val title: String, val detail
             TaskKind.PAGE_EXCEPTION -> Store.addGenericKeywordException(c, d.getString("word"), password)
             TaskKind.WORD_EXCEPTION -> Store.addKeywordException(c, d.getString("blocked"), d.getString("word"), password)
             TaskKind.CATEGORIES -> TaskSettings.categories(c, strings("categories"), password)
+            TaskKind.PLAY_STORE_DELAY -> PlayStoreDelayStore.save(c, d.getInt("minutes"), password)
             TaskKind.TIMING, TaskKind.SECURITY -> {
                 val changes = d.getJSONObject("changes")
                 val values = changes.keys().asSequence().associate { TimingOption.valueOf(it) to changes.getInt(it) }

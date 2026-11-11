@@ -17,13 +17,18 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import com.example.delayedsecrect.SecretClipboard
 
 class LockService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val accessibilityObserver = object : ContentObserver(handler) {
-        override fun onChange(selfChange: Boolean) { Policy.sweep(this@LockService) }
+        override fun onChange(selfChange: Boolean) {
+            BackgroundPowerProtection.ensureEnabled(this@LockService)
+            Policy.sweep(this@LockService)
+            BankingMode.reconcile(this@LockService)
+        }
     }
     private var observingAccessibility = false
     private var scheduledBoundary = 0L
@@ -44,11 +49,12 @@ class LockService : Service() {
         val now = System.currentTimeMillis()
         val cooldown = WatchdogStore.remaining(this)
         val focus = FocusLockStore.remaining(this)
+        val bankingWait = BankingAppStore.waits(this).values.minOrNull() ?: Long.MAX_VALUE
         val taskDelay = ScheduledTasks.nextDelay(this)
         val next = minOf(CurfewRules.nextBoundary(now, CurfewStore.zone(), CurfewStore.appealedNight(this)),
             if (cooldown > 0) now + cooldown else Long.MAX_VALUE,
             if (focus > 0) now + focus else Long.MAX_VALUE,
-            taskDelay?.let { now + it.coerceAtLeast(1000L) } ?: Long.MAX_VALUE)
+            taskDelay?.let { now + it.coerceAtLeast(1000L) } ?: Long.MAX_VALUE, bankingWait)
         if (scheduledBoundary != next) {
             val alarms = getSystemService(AlarmManager::class.java)
             alarms.cancel(boundaryAlarm)
@@ -62,13 +68,26 @@ class LockService : Service() {
 
     private val tick = object : Runnable {
         override fun run() {
-            SecretClipboard.reconcile()
-            Store.applyDueKeywordRemovals(this@LockService)
-            ScheduledTasks.reconcileAsync(this@LockService)
-            Policy.sweep(this@LockService)
-            val untilBoundary = scheduleBoundary()
-            handler.postDelayed(this, minOf(5000L, untilBoundary,
-                Store.timingConfig(this@LockService).milliseconds(TimingOption.POLICY_INTERVAL)))
+            var next = 5000L
+            try {
+                EnforcementRecovery.arm(this@LockService)
+                BackgroundPowerProtection.ensureEnabled(this@LockService)
+                // Enforcement takes priority over optional task/clipboard maintenance.
+                TemporaryLinks.reconcile(this@LockService)
+                Policy.sweep(this@LockService)
+                BankingMode.reconcile(this@LockService)
+                if (BankingAppStore.detectFinance(this@LockService)) BankingCategoryDiscovery.refresh(this@LockService)
+                SecretClipboard.reconcile()
+                Store.applyDueKeywordRemovals(this@LockService)
+                ScheduledTasks.reconcileAsync(this@LockService)
+                next = minOf(next, scheduleBoundary(),
+                    Store.timingConfig(this@LockService).milliseconds(TimingOption.POLICY_INTERVAL))
+            } catch (e: RuntimeException) {
+                Log.e("InstallLock", "Protection check failed; retrying", e)
+            } finally {
+                // One failed provider, preference read, or policy call cannot stop the check loop.
+                handler.postDelayed(this, next)
+            }
         }
     }
 
@@ -76,19 +95,21 @@ class LockService : Service() {
     private val pkgReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             if (i.data?.schemeSpecificPart == Policy.CHROME) Policy.syncChrome(c, force = true)
-            Policy.sweep(c)
+            try { Policy.sweep(c) }
+            catch (e: RuntimeException) { Log.e("InstallLock", "Install check failed; scheduled sweep will retry", e) }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel("lock", "Install lock", NotificationManager.IMPORTANCE_MIN)
+            NotificationChannel("enforcement_v2", "Install Lock protection", NotificationManager.IMPORTANCE_LOW)
         )
-        val n = Notification.Builder(this, "lock")
+        val n = Notification.Builder(this, "enforcement_v2")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentTitle(getString(R.string.lock_notification_title))
             .setContentText(getString(R.string.lock_notification_text))
+            .setOngoing(true).setOnlyAlertOnce(true)
             .setContentIntent(PendingIntent.getActivity(this, 0,
                 Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_LOCK_REASONS)
                     .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -99,6 +120,7 @@ class LockService : Service() {
         } else {
             startForeground(1, n)
         }
+        EnforcementRecovery.arm(this, force = true)
         SecretClipboard.initialize(this)
         registerReceiver(
             pkgReceiver,
@@ -124,9 +146,11 @@ class LockService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Includes opening Install Lock, boot, and sticky restarts after process death.
-        Policy.updateSupportMessages(this)
-        Policy.syncChrome(this, force = true)
-        ScheduledTasks.reschedule(this)
+        EnforcementRecovery.arm(this, force = true)
+        try { Policy.apply(this) }
+        catch (e: RuntimeException) { Log.e("InstallLock", "Could not refresh device-owner protection", e) }
+        try { Policy.syncChrome(this, force = true); ScheduledTasks.reschedule(this) }
+        catch (e: RuntimeException) { Log.e("InstallLock", "Startup reconciliation will retry", e) }
         // Re-schedule immediately when settings change; keep exactly one repeating tick.
         handler.removeCallbacks(tick)
         handler.post(tick)
@@ -134,12 +158,18 @@ class LockService : Service() {
     }
 
     override fun onDestroy() {
+        EnforcementRecovery.arm(this, soon = true)
         handler.removeCallbacks(tick)
         unregisterReceiver(pkgReceiver)
         unregisterReceiver(wakeReceiver)
         getSystemService(AlarmManager::class.java).cancel(boundaryAlarm)
         if (observingAccessibility) contentResolver.unregisterContentObserver(accessibilityObserver)
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        EnforcementRecovery.arm(this, soon = true)
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

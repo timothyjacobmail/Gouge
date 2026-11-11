@@ -18,13 +18,26 @@ data class AppLockReasons(
     val categoryCooldownUntil: Long? = null,
     val categoryServiceMissing: Boolean = false,
     val rapidScrollCooldown: Boolean = false,
-    val focusUntil: Long? = null
+    val focusUntil: Long? = null,
+    val bankingMode: Boolean = false,
+    val bankingListUntil: Long? = null,
+    val redditServiceMissing: Boolean = false,
+    val playStoreServiceMissing: Boolean = false
 ) {
     val shouldLock: Boolean get() = keywordServiceMissing || appLock || installWaitUntil != null ||
             otherBrowser || curboxMissing || neverInstallRule != null || googleVpnMissing || domainServiceMissing || curfewUntil != null ||
-            categoryCooldownUntil != null || categoryServiceMissing || focusUntil != null
+            categoryCooldownUntil != null || categoryServiceMissing || focusUntil != null || bankingListUntil != null || redditServiceMissing || playStoreServiceMissing
 
     fun descriptions(): List<String> = buildList {
+        if (playStoreServiceMissing) add("Play Store's two-minute opening delay needs Install Lock's accessibility service. Enable it and finish banking mode to open Play Store.")
+        if (redditServiceMissing) add("The subreddit allowlist requires Install Lock's accessibility service. " +
+            "Reddit and registered Reddit clients stay locked while monitoring is disconnected, including during banking mode. " +
+            "Re-enable Install Lock accessibility to restore access to allowed communities.")
+        bankingListUntil?.let {
+            val end = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+            add("This app was added to the banking/Finance list. Its 15-minute wait ends at $end. " +
+                "Switching accessibility on or off and temporary app-access passwords cannot skip this wait.")
+        }
         focusUntil?.let {
             val end = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
             add("Focus lock is active until $end. It cannot be cancelled or shortened. " +
@@ -36,19 +49,22 @@ data class AppLockReasons(
                 else "Manga/comics category cooldown until $end: a categorized website remained visible for 10 seconds. ") +
                 "Browsers, Google, YouTube, Instagram, Reddit and app installations are locked for 30 minutes. App passwords cannot bypass this cooldown.")
         }
-        if (categoryServiceMissing) add("The website and rapid-scrolling watchdogs require Install Lock's accessibility service. " +
+        if (bankingMode && categoryServiceMissing) add("Banking mode has paused Install Lock's accessibility services. " +
+            "Browsers, Google, YouTube, Instagram and Reddit stay locked while monitoring is off. " +
+            "Open Banking mode and finish banking to restore the previously enabled services.")
+        else if (categoryServiceMissing) add("The website and rapid-scrolling watchdogs require Install Lock's accessibility service. " +
             "Browsers, Google, YouTube, Instagram and Reddit stay locked until the service is connected.")
         curfewUntil?.let {
             val end = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
             add("Night curfew is active until $end. Curfew overrides temporary app unlocks, whitelists and category exemptions. " +
                 "Only an appeal submitted before 9 pm can postpone that night's start to midnight.")
         }
-        if (domainServiceMissing) add("Ordered domain rules require Install Lock's browser accessibility service. " +
+        if (domainServiceMissing && !bankingMode) add("Ordered domain rules require Install Lock's browser accessibility service. " +
                 if (accessibilityEnabled) "The service is enabled but has not connected; wait for it or re-enable it."
                 else "The service is disabled. Enable it in Android Accessibility settings.")
         if (googleVpnMissing) add("Install Lock's built-in VPN is not running. " +
                 "Open Google VPN filter in Install Lock and turn it on. Google requires this VPN even during a temporary app unlock.")
-        if (keywordServiceMissing) add(
+        if (keywordServiceMissing && !bankingMode) add(
             if (accessibilityEnabled)
                 "The browser and Google keyword accessibility service is enabled but has not connected. " +
                         "Wait for it to connect, or re-enable it in Android Accessibility settings."

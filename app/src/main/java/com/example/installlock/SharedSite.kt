@@ -29,6 +29,9 @@ internal object SharedSite {
     /** Host-only extraction remains available for rules that block entire domains. */
     fun domainFromText(text: String?): String? = uriFromText(text)?.let { host(it) }
 
+    /** Temporary page approvals retain the full link, including content-identifying queries. */
+    fun temporaryLink(text: String?): String? = directWebsite(text)?.toASCIIString()?.let(TemporaryLinkRules::normalize)
+
     /** Narrowest path first, then parent directories and the whole domain. Never share URL tokens. */
     fun whitelistOptions(text: String?): List<String> {
         var uri = directWebsite(text) ?: uriFromText(text) ?: return emptyList()

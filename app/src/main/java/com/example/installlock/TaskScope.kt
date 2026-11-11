@@ -3,6 +3,8 @@ package com.example.installlock
 enum class TaskKind(val title: String, val perApp: Boolean = false) {
     WHITELIST_ADD("Add Chrome whitelist sites"),
     WHITELIST_OFF("Turn off Chrome whitelist"),
+    REDDIT_ALLOW("Add allowed subreddits"),
+    REDDIT_OFF("Relax Reddit app protection"),
     KEYWORD_OFF("Turn off keyword filtering"),
     WORD_EXCEPTION("Add per-word exceptions"),
     PAGE_EXCEPTION("Add generic page exceptions"),
@@ -17,6 +19,7 @@ enum class TaskKind(val title: String, val perApp: Boolean = false) {
     SCREENSHOTS_ALLOW("Allow screenshots"),
     TIMING("Change durations and waiting periods"),
     CATEGORIES("Change immediate-access categories"),
+    PLAY_STORE_DELAY("Change Play Store opening delay"),
     SECURITY("Change password lockout settings"),
     ENROLL_APP("Set up passwords for newly locked apps"),
     APP_UNLOCK("Temporary access", true),
@@ -50,8 +53,10 @@ internal interface TaskData {
 
 /** No signed-in task session or reusable authorization token exists. Each operation checks its exact scope. */
 internal class TaskVault(private val data: TaskData, private val now: () -> Long = System::currentTimeMillis,
-                         private val lockout: (Int) -> Long = { fails -> if (fails < 5) 0 else 60_000L }) {
+                         private val lockout: (Int) -> Long = { fails -> if (fails < 5) 0 else 60_000L },
+                         private val encryptPassword: ((TaskScope, String) -> String)? = null) {
     companion object {
+        private val verifiedPasswords = PasswordVerificationCache()
         private fun generatedPrefix(scope: TaskScope) = "IL-" + java.security.MessageDigest.getInstance("SHA-256")
             .digest(scope.id.toByteArray(Charsets.UTF_8)).take(8).joinToString("") { "%02x".format(it) } + "-A1"
         fun generatePassword(scope: TaskScope): String = generatedPrefix(scope) + java.util.Base64.getUrlEncoder().withoutPadding()
@@ -72,10 +77,12 @@ internal class TaskVault(private val data: TaskData, private val now: () -> Long
     private fun matches(scope: TaskScope, password: String): Boolean {
         if (Thread.currentThread().isInterrupted) return false
         return try {
-        val saved = data.read()
-        val salt = java.util.Base64.getDecoder().decode(saved[prefix(scope) + "salt"] ?: return false)
-        val expected = java.util.Base64.getDecoder().decode(saved[prefix(scope) + "hash"] ?: return false)
-        java.security.MessageDigest.isEqual(expected, hash(password, salt))
+        val salt = data.get(prefix(scope) + "salt") ?: return false
+        val expected = data.get(prefix(scope) + "hash") ?: return false
+        verifiedPasswords.matches(scope.id, salt, expected, password) {
+            java.security.MessageDigest.isEqual(java.util.Base64.getDecoder().decode(expected),
+                hash(password, java.util.Base64.getDecoder().decode(salt)))
+        }
         } catch (_: IllegalArgumentException) { false }
     }
     /** Match local vault entries without counting unrelated saved secrets as failed attempts. */
@@ -87,6 +94,7 @@ internal class TaskVault(private val data: TaskData, private val now: () -> Long
         return mutableMapOf(key + "salt" to encoded(salt), key + "hash" to encoded(hash(item.password, salt)),
             key + "fails" to "0", key + "lockout" to "0").apply {
             item.limitMinutes?.let { put(key + "limit", it.toString()) }
+            encryptPassword?.let { put(key + "secret", it(item.scope, item.password)) }
         }
     }
     private fun validation(items: List<NewTaskPassword>, share: Boolean): String? = when {
@@ -106,6 +114,19 @@ internal class TaskVault(private val data: TaskData, private val now: () -> Long
         }
         return if (data.write(changes)) null else "Could not confirm passwords were saved. Reopen setup to check."
     }
+    /** Upgrade-only enrollment: these new scopes cannot replace any existing credential. */
+    fun installReddit(items: List<NewTaskPassword>, share: Boolean): String? {
+        if (!ready()) return "Set up task passwords first."
+        validation(items, share)?.let { return it }
+        val missing = RedditRules.credentialKinds.map { TaskScope(it) }.filterNot(::has).toSet()
+        if (missing.isEmpty() || items.map { it.scope }.toSet() != missing)
+            return "Only missing Reddit task passwords can be set up here."
+        if (!share && items.any { !isSeparatePassword(it.scope, it.password) })
+            return "Generate separate Reddit passwords, or explicitly permit chosen passwords and possible sharing."
+        val changes = mutableMapOf("task.scopes" to (scopes() + missing).joinToString("\n") { it.id })
+        items.forEach { changes.putAll(record(it)) }
+        return if (data.write(changes)) null else "Could not save Reddit task passwords."
+    }
     fun check(scope: TaskScope, password: String): Boolean {
         if (!ready() || password.isBlank() || !has(scope) || remaining(scope) > 0) return false
         val key = prefix(scope)
@@ -114,12 +135,31 @@ internal class TaskVault(private val data: TaskData, private val now: () -> Long
         data.write(mapOf(key + "fails" to fails.toString(), key + "lockout" to (now() + lockout(fails)).toString()))
         return false
     }
+    /** Generates only this newly introduced credential; existing passwords cannot be replaced. */
+    fun installPlayStoreDelay(password: String): String? {
+        val scope = TaskScope(TaskKind.PLAY_STORE_DELAY)
+        if (!ready()) return "Set up task passwords first."
+        if (has(scope)) return "Play Store delay password is already configured."
+        if (!isSeparatePassword(scope, password)) return "Use a generated password for this task."
+        val changes = record(NewTaskPassword(scope, password)).toMutableMap()
+        changes["task.scopes"] = (scopes() + scope).joinToString("\n") { it.id }
+        changes[prefix(scope) + "delayMinutes"] = "2"
+        return if (data.write(changes)) null else "Could not save Play Store delay password."
+    }
     fun change(scope: TaskScope, old: String, password: String, share: Boolean): String? {
         if (!StorePasswordRules.valid(password)) return "Use 8 or more characters, including a letter and a number."
         if (!check(scope, old)) return "Wrong password for this task, or this task is locked out."
         // Never test a candidate against other roles: that would let one task probe their secrets.
         if (!share && !isSeparatePassword(scope, password)) return "Generate a separate password, or explicitly permit a chosen password and possible sharing."
         return if (data.write(record(NewTaskPassword(scope, password)))) null else "Could not save password."
+    }
+    /** Completion of the persisted one-time subreddit-add migration wait; never replaces native credentials. */
+    internal fun recoverLegacySubredditPassword(expectedHash: String, password: String): Boolean {
+        val scope = TaskScope(TaskKind.REDDIT_ALLOW)
+        val key = prefix(scope)
+        if (!ready() || encryptPassword == null || data.get(key + "secret") != null || remaining(scope) > 0 ||
+            expectedHash.isEmpty() || data.get(key + "hash") != expectedHash || !isSeparatePassword(scope, password)) return false
+        return data.write(record(NewTaskPassword(scope, password)))
     }
     fun enroll(items: List<NewTaskPassword>, password: String, share: Boolean): String? {
         validation(items, share)?.let { return it }

@@ -9,7 +9,8 @@ internal data class ChromeNavigationConfig(
     val extraLockedDomains: Set<String>,
     val domainRules: List<DomainRule> = emptyList(),
     val judgeHosts: Set<String> = emptySet(),
-    val judgeEligibleHosts: Set<String> = JudgeRules.reviewedHosts
+    val judgeEligibleHosts: Set<String> = JudgeRules.reviewedHosts,
+    val temporaryUrls: List<String> = emptyList()
 )
 
 internal enum class ChromeNavigationBlock { WHITELIST, EXTRA_SITE, DOMAIN_RULE }
@@ -42,7 +43,8 @@ internal class ChromeNavigationFilter(private val config: ChromeNavigationConfig
         val domainAction = domains.match(current.host)?.rule?.action
         if (domainAction == DomainAction.BLOCK) return ChromeNavigationBlock.DOMAIN_RULE
         val judgeAllows = current.host in judged && current.scheme == "https" && current.port == 443 && !JudgeRules.unsafeRoute(address)
-        if (config.whitelistOn && domainAction != DomainAction.ALLOW && !judgeAllows && allowed.none { it.matches(current) })
+        val temporaryAllows = config.temporaryUrls.any { TemporaryLinkRules.matches(it, address) }
+        if (config.whitelistOn && domainAction != DomainAction.ALLOW && !judgeAllows && !temporaryAllows && allowed.none { it.matches(current) })
             return ChromeNavigationBlock.WHITELIST
         return null
     }

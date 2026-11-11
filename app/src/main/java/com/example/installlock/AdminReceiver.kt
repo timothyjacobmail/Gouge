@@ -10,6 +10,6 @@ class AdminReceiver : DeviceAdminReceiver() {
 
     private fun start(context: Context) {
         Policy.apply(context)
-        LockService.start(context)
+        EnforcementRecovery.recover(context)
     }
 }
