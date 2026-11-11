@@ -685,14 +685,18 @@ class MainActivity : AppCompatActivity() {
     private fun showDashboard() {
         val heading = LinearLayout(this).apply {
             gravity = android.view.Gravity.CENTER_VERTICAL
-            addView(UiStyle.menuButton(this@MainActivity) { goTo { showMoreProtections() } },
-                LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(8) })
             addView(label("Gouge", 26f), LinearLayout.LayoutParams(0, -2, 1f))
+            addView(UiStyle.searchButton(this@MainActivity) { goTo { showDashboardSearch() } },
+                LinearLayout.LayoutParams(dp(48), dp(48)))
+            addView(UiStyle.vaultButton(this@MainActivity) {
+                startActivity(Intent(this@MainActivity, com.example.delayedsecrect.MainActivity::class.java))
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
+            addView(UiStyle.menuButton(this@MainActivity) { goTo { showMoreProtections() } },
+                LinearLayout.LayoutParams(dp(48), dp(48)))
         }
         val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), heading,
             label("Confirm a sensitive change to apply it after its saved password delay."),
             button("Pending tasks") { goTo { showScheduledTasks() } },
-            button("Personal secret vault (optional)") { startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java)) },
             button("Why apps are locked") { goTo { showLockReasons() } },
             button(if (BankingMode.active(this)) "Banking mode - accessibility off" else "Banking mode") { goTo { showBankingMode() } },
             focusActions(),
@@ -718,6 +722,10 @@ class MainActivity : AppCompatActivity() {
                 label(BackgroundPowerProtection.summary(this)),
                 button("Disable battery optimization") { BatteryProtection.request(this) }
                     .apply { visibility = if (BatteryProtection.exempt(this@MainActivity)) View.GONE else View.VISIBLE }))
+        screen(*views)
+    }
+
+    private fun showDashboardSearch() {
         val search = EditText(this).apply {
             hint = "Search settings and tasks"
             inputType = InputType.TYPE_CLASS_TEXT
@@ -728,22 +736,32 @@ class MainActivity : AppCompatActivity() {
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val clear = button("Clear search") { search.setText("") }
         val destinations = searchDestinations()
+        fun closeKeyboard() {
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                .hideSoftInputFromWindow(search.windowToken, 0)
+        }
         fun filter() {
             dashboardQuery = search.text.toString()
             val terms = dashboardQuery.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-            val searching = terms.isNotEmpty()
-            views.drop(2).forEach { it.visibility = if (searching) View.GONE else View.VISIBLE }
             clear.visibility = if (dashboardQuery.isNotEmpty()) View.VISIBLE else View.GONE
-            results.visibility = if (searching) View.VISIBLE else View.GONE
             results.removeAllViews()
-            if (!searching) return
+            if (terms.isEmpty()) return
             val matches = destinations.filter { entry -> terms.all { (entry.title + " " + entry.keywords).contains(it, ignoreCase = true) } }
             results.addView(label(if (matches.isEmpty()) "No settings or tasks match your search." else "${matches.size} results"))
-            matches.forEach { entry -> results.addView(button(entry.title) { goTo { entry.open() } }) }
+            matches.forEach { entry -> results.addView(button(entry.title) {
+                closeKeyboard()
+                goTo { entry.open() }
+            }) }
         }
         search.doAfterTextChanged { filter() }
-        screen(views[0], views[1], search, clear, results, *views.drop(2).toTypedArray())
+        screen(label(getString(R.string.search_settings_and_tasks), 24f), search, clear, results,
+            button("Back") { closeKeyboard(); back() })
         filter()
+        search.requestFocus()
+        search.post {
+            if (search.isAttachedToWindow) getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                .showSoftInput(search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
     }
 
     private fun showMoreProtections() {

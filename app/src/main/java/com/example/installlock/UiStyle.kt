@@ -152,6 +152,12 @@ internal object UiStyle {
     fun menuButton(context: Context, onClick: () -> Unit): View = navigationButton(
         context, R.drawable.ic_il_menu, context.getString(R.string.open_more_protections), onClick)
 
+    fun searchButton(context: Context, onClick: () -> Unit): View = navigationButton(
+        context, R.drawable.ic_il_search, context.getString(R.string.search_settings_and_tasks), onClick)
+
+    fun vaultButton(context: Context, onClick: () -> Unit): View = navigationButton(
+        context, R.drawable.ic_il_key, context.getString(R.string.open_personal_vault), onClick)
+
     private fun navigationButton(context: Context, drawable: Int, description: String, onClick: () -> Unit): View = android.widget.ImageButton(context).apply {
         setImageResource(drawable)
         imageTintList = ColorStateList.valueOf(color(context, MaterialR.attr.colorOnSurface))
