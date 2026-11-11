@@ -683,15 +683,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDashboard() {
-        val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), label("Gouge", 26f),
+        val heading = LinearLayout(this).apply {
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            addView(UiStyle.menuButton(this@MainActivity) { goTo { showMoreProtections() } },
+                LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(8) })
+            addView(label("Gouge", 26f), LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), heading,
             label("Confirm a sensitive change to apply it after its saved password delay."),
             button("Pending tasks") { goTo { showScheduledTasks() } },
             button("Personal secret vault (optional)") { startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java)) },
             button("Why apps are locked") { goTo { showLockReasons() } },
             button(if (BankingMode.active(this)) "Banking mode - accessibility off" else "Banking mode") { goTo { showBankingMode() } },
-            curfewActions(),
             focusActions(),
-            watchdogActions(),
             section("Apps", "App access, locks and Play Store categories",
                 button("Open Play Store") { startActivity(PlayStoreDelayActivity.openIntent(this)) },
                 button("Play Store opening delay") { goTo { showPlayStoreDelaySettings() } },
@@ -702,7 +706,6 @@ class MainActivity : AppCompatActivity() {
                 button("Never-install list") { goTo { showNeverInstall() } },
                 button("Prevent uninstall & force stop") { goTo { showNoUninstallPicker() } }),
             browserActions(),
-            additionalProtections(),
             section("Settings & passwords", "Each save and password change is scoped to its own task",
                 button("App updates") { startActivity(Intent(this, UpdateActivity::class.java)) },
                 button("Settings") { openSettings() },
@@ -743,6 +746,12 @@ class MainActivity : AppCompatActivity() {
         filter()
     }
 
+    private fun showMoreProtections() {
+        screen(label(getString(R.string.more_protections), 26f),
+            curfewActions(), additionalProtections(), watchdogActions(),
+            button("Back") { back() })
+    }
+
     private fun additionalProtections() = section("Additional protections", "Separate credentials for each protection",
         label(curboxStatus()),
         button(if (Policy.isScreenCaptureBlocked(this)) "Allow screenshots (delayed task)" else "Block screenshots") {
@@ -756,6 +765,7 @@ class MainActivity : AppCompatActivity() {
     private data class SearchDestination(val title: String, val keywords: String, val open: () -> Unit)
 
     private fun searchDestinations(): List<SearchDestination> = buildList {
+        add(SearchDestination(getString(R.string.more_protections), "menu hamburger protections") { showMoreProtections() })
         add(SearchDestination("Personal secret vault", "password vault reveal unlock copy import delay") {
             startActivity(Intent(this@MainActivity, com.example.delayedsecrect.MainActivity::class.java))
         })
@@ -795,7 +805,7 @@ class MainActivity : AppCompatActivity() {
         add(SearchDestination("Task passwords", "change setup credentials app passwords") { showTaskPasswords() })
         add(SearchDestination("Screenshots & Curbox guard", "additional protections screen capture screenshots block allow turn off on curbox guard youtube instagram") {
             sectionStates["Additional protections"] = true
-            screen(label("Additional protections", 22f), additionalProtections(), button("Back") { back() })
+            showMoreProtections()
         })
         add(SearchDestination("About & licenses", "about licenses font website category data") { showAbout() })
     }

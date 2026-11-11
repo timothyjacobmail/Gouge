@@ -146,10 +146,17 @@ internal object UiStyle {
         if (view is ViewGroup) for (index in 0 until view.childCount) styleInputs(view.getChildAt(index))
     }
 
-    fun backButton(context: Context, onClick: () -> Unit): View = android.widget.ImageButton(context).apply {
-        setImageResource(R.drawable.ic_il_back)
+    fun backButton(context: Context, onClick: () -> Unit): View = navigationButton(
+        context, R.drawable.ic_il_back, context.getString(R.string.ui_back), onClick)
+
+    fun menuButton(context: Context, onClick: () -> Unit): View = navigationButton(
+        context, R.drawable.ic_il_menu, context.getString(R.string.open_more_protections), onClick)
+
+    private fun navigationButton(context: Context, drawable: Int, description: String, onClick: () -> Unit): View = android.widget.ImageButton(context).apply {
+        setImageResource(drawable)
         imageTintList = ColorStateList.valueOf(color(context, MaterialR.attr.colorOnSurface))
-        contentDescription = context.getString(R.string.ui_back)
+        contentDescription = description
+        tooltipText = description
         background = RippleDrawable(ColorStateList.valueOf(ColorUtils.setAlphaComponent(
             color(context, AppCompatR.attr.colorPrimary), 35)), null, shape(context, Color.WHITE, 24))
         setOnClickListener { onClick() }
