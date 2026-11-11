@@ -59,10 +59,11 @@ internal object ScheduledTasks {
 
     /** Native credentials are ready immediately after setup. Legacy secrets are imported once. */
     fun choices(c: Context, scope: TaskScope): List<InlineSecretChoice> {
+        nativeChoice(c, scope)?.let { return listOf(it) }
         if (!TaskPasswords.has(c, scope)) return emptyList()
         // Listing a task needs only credential metadata. Decrypt and authenticate on confirmation.
         if (!NativeTaskPasswords.hasSavedPassword(c, scope)) {
-            val matching = SecretStore(c).getAll().filter { TaskPasswords.vault(c).matchesStoredSecret(scope, it.value) }
+            val matching = matchingSecrets(c, scope)
             if (matching.isEmpty() || matching.any { hardLocked(c, it) }) return emptyList()
             val delay = matching.maxOf { it.delayMinutes ?: SettingsStore(c).getDelayMinutes() }
             if (!NativeTaskPasswords.attach(c, scope, matching.first().value, delay)) return emptyList()
@@ -70,12 +71,24 @@ internal object ScheduledTasks {
         return listOf(InlineSecretChoice(NativeTaskPasswords.reference(c, scope), scope.title, NativeTaskPasswords.delay(c, scope)))
     }
 
+    /** Bounded metadata-only path; never falls through to vault scanning or password hashing. */
+    fun nativeChoice(c: Context, scope: TaskScope): InlineSecretChoice? =
+        if (TaskPasswords.has(c, scope) && NativeTaskPasswords.hasSavedPassword(c, scope))
+            InlineSecretChoice(NativeTaskPasswords.reference(c, scope), scope.title, NativeTaskPasswords.delay(c, scope))
+        else null
+
     fun attachExisting(c: Context, scope: TaskScope, password: String): Boolean {
-        val vault = TaskPasswords.vault(c)
-        val matching = SecretStore(c).getAll().filter { vault.matchesStoredSecret(scope, it.value) }
+        val matching = matchingSecrets(c, scope)
         if (matching.any { hardLocked(c, it) }) return false
         val delay = matching.maxOfOrNull { it.delayMinutes ?: SettingsStore(c).getDelayMinutes() } ?: 1
         return NativeTaskPasswords.attach(c, scope, password, delay)
+    }
+
+    private fun matchingSecrets(c: Context, scope: TaskScope): List<Secret> {
+        val vault = TaskPasswords.vault(c)
+        return StoredSecretLookup.matching(SecretStore(c).getAll(), { it.value }) {
+            vault.matchesStoredSecret(scope, it)
+        }
     }
 
     private fun hardLocked(c: Context, secret: Secret): Boolean =
@@ -90,7 +103,7 @@ internal object ScheduledTasks {
         check(canRecoverSubredditPassword(c, scope)) { "This task is not eligible for the old-password migration." }
         check(TaskPasswords.remaining(c, scope) == 0L) { "Wait for this task's password lockout to end." }
         require(RedditRules.normalize(JSONObject(task.details).getString("subreddit")) != null)
-        val matching = SecretStore(c).getAll().filter { TaskPasswords.vault(c).matchesStoredSecret(scope, it.value) }
+        val matching = matchingSecrets(c, scope)
         check(matching.none { hardLocked(c, it) }) { "This saved password is hard locked. Wait for that lock to end." }
         val minimum = matching.maxOfOrNull { it.delayMinutes ?: SettingsStore(c).getDelayMinutes() } ?: 1
         val reference = "recovery:" + NativeTaskPasswords.reference(c, scope)
@@ -172,9 +185,7 @@ internal object ScheduledTasks {
                         else {
                             val password = TaskVault.generatePassword(scope)
                             val hash = c.getSharedPreferences("install_lock", Context.MODE_PRIVATE).getString("task.${scope.id}.hash", "").orEmpty()
-                            val hardLock = SecretStore(c).getAll().any {
-                                TaskPasswords.vault(c).matchesStoredSecret(scope, it.value) && hardLocked(c, it)
-                            }
+                            val hardLock = matchingSecrets(c, scope).any { hardLocked(c, it) }
                             !hardLock && TaskPasswords.vault(c).recoverLegacySubredditPassword(hash, password) && execute(entry.task, password)
                         }
                     }

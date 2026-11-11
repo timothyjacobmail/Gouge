@@ -71,8 +71,7 @@ internal class TaskVault(private val data: TaskData, private val now: () -> Long
     fun remaining(scope: TaskScope) = ((data.get(prefix(scope) + "lockout")?.toLongOrNull() ?: 0L) - now()).coerceAtLeast(0)
     fun limit(app: String) = data.get(prefix(TaskScope(TaskKind.APP_UNLOCK, app)) + "limit")?.toIntOrNull() ?: 0
     fun until(app: String) = if (ready()) data.get(prefix(TaskScope(TaskKind.APP_UNLOCK, app)) + "until")?.toLongOrNull() ?: 0L else 0L
-    private fun hash(password: String, salt: ByteArray) = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        .generateSecret(javax.crypto.spec.PBEKeySpec(password.toCharArray(), salt, 120_000, 256)).encoded
+    private fun hash(password: String, salt: ByteArray) = PasswordKdf.derive(password, salt)
     private fun encoded(bytes: ByteArray) = java.util.Base64.getEncoder().encodeToString(bytes)
     private fun matches(scope: TaskScope, password: String): Boolean {
         if (Thread.currentThread().isInterrupted) return false

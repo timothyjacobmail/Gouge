@@ -1960,7 +1960,7 @@ class MainActivity : AppCompatActivity() {
             explanation, upgradePassword, upgrade, msg, confirm,
             button("Task passwords") { goTo { showTaskPasswords() } },
             button("Cancel") { back() })
-        taskJob(msg, { choices = ScheduledTasks.choices(this, scope); null }) {
+        fun showChoices() {
             msg.text = ""
             recoverSubredditPassword = choices.isEmpty() && ScheduledTasks.canRecoverSubredditPassword(this, scope)
             confirm.isEnabled = choices.isNotEmpty() || recoverSubredditPassword
@@ -1973,6 +1973,11 @@ class MainActivity : AppCompatActivity() {
                 "When it ends, Gouge saves a new password automatically and allows only this requested subreddit in Reddit and Chrome. There is no second wait. Existing rules stay active during recovery."
             else "Enter this task's current password once to store it natively. Existing passwords and protections stay in effect."
         }
+        val native = ScheduledTasks.nativeChoice(this, scope)
+        if (native != null) {
+            choices = listOf(native)
+            showChoices()
+        } else taskJob(msg, { choices = ScheduledTasks.choices(this, scope); null }) { showChoices() }
     }
     private fun showScheduledTasks() {
         val entries = ScheduledTasks.all(this)

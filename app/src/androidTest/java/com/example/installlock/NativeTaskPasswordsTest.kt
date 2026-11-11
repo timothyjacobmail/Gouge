@@ -33,6 +33,7 @@ class NativeTaskPasswordsTest {
         prefs.edit().putString("task.${scope.id}.secret", "unreadable ciphertext").commit()
         val start = android.os.SystemClock.elapsedRealtime()
         repeat(10) { assertEquals(1, ScheduledTasks.choices(context, scope).size) }
+        assertNotNull(ScheduledTasks.nativeChoice(context, scope))
         android.util.Log.i("NativePasswordTiming", "10 metadata listings: ${android.os.SystemClock.elapsedRealtime() - start} ms")
         assertNull(NativeTaskPasswords.password(context, scope))
     }

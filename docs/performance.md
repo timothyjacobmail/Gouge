@@ -76,3 +76,49 @@ To repeat a bounded recording (10–60 seconds):
 ```
 
 The script saves the textual report under `build/profiles` and deletes only its uniquely named remote recording afterward.
+
+## Task confirmation latency in 1.9.7
+
+The reported delay occurred before **Confirm this task** became available while changing YouTube's per-app limit. An already-native credential needs only a metadata read. A legacy hash-only credential instead searches saved vault values, deriving PBKDF2-HMAC-SHA256 for each candidate before attaching the matching current password. This shared path affects older credentials for other app, website and settings tasks as well. The exact original UI wait cannot be replayed after a credential has migrated without reverting it; the comparison below uses isolated synthetic credentials instead.
+
+A Simpleperf capture during legacy lookup attributed 62.05% of inclusive sampled CPU to `TaskVault.hash`, with 62.01% under Android's Bouncy Castle PBKDF2 provider and 52.79% under its HMAC finalization. Unlike the background policy work in 1.9.6, this is a self-contained CPU-heavy workload that benefits from a native boundary.
+
+The app now derives the **same** 32-byte PBKDF2-HMAC-SHA256 result using [RustCrypto's PBKDF2 implementation](https://docs.rs/pbkdf2/0.13.0/pbkdf2/fn.pbkdf2_hmac.html) and SHA-256, keeping UTF-8 input, each existing salt and all 120,000 rounds. A single JNI call performs the complete derivation. Constant-time result comparison, credential scopes, failed-attempt accounting, lockouts, confirmation waits and per-app limits retain their existing behavior. Android Keystore still encrypts saved passwords. The original JCA derivation remains a fallback for unavailable native loading and malformed UTF-16, preserving platform encoding behavior.
+
+Two additional changes remove avoidable waiting without caching authorization:
+
+- Saved native metadata enables the confirmation button directly, without queuing behind the single credential executor. Legacy migration stays off the UI thread.
+- Legacy lookup verifies each distinct saved value once per invocation. It still checks **all** distinct values and retains every matching entry, including a later duplicate with a longer delay or hard lock. It does not infer equivalent passwords from string equality or remember failed guesses between calls. Successful-verification cache hits no longer wait behind an unrelated expensive verifier holding the cache monitor.
+
+### Isolated phone measurements
+
+Measured on the same Vivo V2436, using the debug app with release-optimized Rust. The fixed fixture contains 25 distinct synthetic saved values and one matching task credential. Both the Android context and its application context redirect preferences to uniquely named test files, which are deleted afterward. Preliminary trials were excluded after detecting and correcting encrypted-preference context isolation; their synthetic entries and timers were removed and the original vault entries verified unchanged. The final fixture asserts its exact size. No actual task was scheduled or protection setting changed by the benchmark.
+
+| Operation | Platform implementation | Rust implementation |
+| --- | ---: | ---: |
+| PBKDF2, ASCII password | 943.34 ms | 26.73 ms |
+| PBKDF2, Unicode password | 893.79 ms | 26.22 ms |
+| PBKDF2, embedded NUL | 967.41 ms | 26.63 ms |
+| PBKDF2, long password | 880.40 ms | 26.45 ms |
+| 25 saved-value verifications / complete migration | 23,370.32 ms | 1,141.55 ms |
+
+These PBKDF2 timings include JNI transfer and compare byte-for-byte equal outputs with the installed Android provider. The four-case median is approximately 919 ms versus 26.5 ms, about 35 times faster for this operation. The platform 25-entry measurement times verification only; the Rust measurement includes the full lookup, hard-lock checks, Keystore attachment and preference commit, so it is a conservative comparison rather than identical whole-screen paths. Metadata lookup after migration took 2.00 ms. Cold native authentication including Keystore decryption took 53.97 ms. Ten warm decrypt/checks took 324.92 ms total; Keystore costs remain even when verification is cached.
+
+CPU frequency and thermal state were not fixed, other app services continued running, and the tests are not battery or universal UI-latency measurements. [Numeric results](performance/password-confirmation-vivo-20261111.csv) contain only synthetic workload labels and elapsed times.
+
+Validation: 380 app JVM tests plus 39 vault JVM tests pass; all 11 selected phone tests pass, covering native hash compatibility, saved-password changes, metadata-only lookup, maximum duplicate delays, hard locks and incorrect manual attachment. A release-optimized Rust known-vector test also passes. All four Android ABI libraries compile with 16 KB ELF alignment. The arm64 library is approximately 260 KB; no prebuilt binaries are stored in Git.
+
+### Build and reproduce
+
+Install Rust 1.99.1 and Android NDK 30.0.16248370, or set `ANDROID_NDK_HOME` and `GOUGE_CARGO` for custom locations. Gradle builds the locked Rust source for arm64-v8a, armeabi-v7a, x86_64 and x86 and packages the resulting libraries. Android API 30 matches the app's existing minimum SDK. Standard SDK NDK installs are detected through `local.properties` or `ANDROID_HOME`. Source, dependency lockfile, JNI contract and notice-generation instructions are in [native/password-kdf](../native/password-kdf/README.md).
+
+```powershell
+./gradlew.bat :app:testDebugUnitTest :secretvault:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w -e class com.example.installlock.TaskConfirmationTimingTest,com.example.installlock.LegacySecretLookupTest,com.example.installlock.NativeTaskPasswordsTest -e profileBaseline true com.example.installlock.test/androidx.test.runner.AndroidJUnitRunner
+adb logcat -d -s TaskConfirmationTiming:I '*:S'
+adb shell am start -n com.example.installlock/.MainActivity
+```
+
+Run only the listed isolated classes on a provisioned personal phone; unrelated historical integration tests can exercise policy APIs. The optional `profileNativeApp` argument also reads metadata and verifies the existing native limit credential for that package, without resetting failures, scheduling a task or printing its value.

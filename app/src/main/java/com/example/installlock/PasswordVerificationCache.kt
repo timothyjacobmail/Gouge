@@ -8,7 +8,7 @@ internal class PasswordVerificationCache(private val capacity: Int = 64) {
     private val successes = object : LinkedHashMap<String, Unit>(capacity, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>?) = size > capacity
     }
-    @Synchronized fun matches(scope: String, salt: String, hash: String, password: String, verify: () -> Boolean): Boolean {
+    fun matches(scope: String, salt: String, hash: String, password: String, verify: () -> Boolean): Boolean {
         val digest = MessageDigest.getInstance("SHA-256")
         for (part in listOf(scope, salt, hash, password)) {
             val bytes = part.toByteArray(Charsets.UTF_8)
@@ -16,9 +16,10 @@ internal class PasswordVerificationCache(private val capacity: Int = 64) {
             digest.update(bytes)
         }
         val key = java.util.Base64.getEncoder().encodeToString(digest.digest())
-        if (successes[key] != null) return true
+        synchronized(successes) { if (successes[key] != null) return true }
+        // Slow unrelated KDF work must not hold the cache monitor and stall existing hits.
         if (!verify()) return false
-        successes[key] = Unit
+        synchronized(successes) { successes[key] = Unit }
         return true
     }
 }

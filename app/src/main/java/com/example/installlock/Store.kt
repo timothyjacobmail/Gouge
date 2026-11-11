@@ -4,8 +4,6 @@ import android.content.Context
 import android.util.Base64
 import java.security.MessageDigest
 import java.security.SecureRandom
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
 
 object Store {
     private val domainRuleCache = ParsedValueCache<String, List<DomainRule>> { raw -> raw
@@ -179,10 +177,7 @@ object Store {
 
     fun setCurboxGuard(c: Context, on: Boolean) =
         p(c).edit().putBoolean("curboxGuard", on).apply()
-    private fun hash(pw: String, salt: ByteArray): ByteArray =
-        SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-            .generateSecret(PBEKeySpec(pw.toCharArray(), salt, 120_000, 256))
-            .encoded
+    private fun hash(pw: String, salt: ByteArray): ByteArray = PasswordKdf.derive(pw, salt)
 
     // ---------- protected apps (password-gated unlock) ----------
 

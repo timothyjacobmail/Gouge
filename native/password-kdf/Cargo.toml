@@ -1,0 +1,22 @@
+[package]
+name = "gouge-password-kdf"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "gouge_password_kdf"
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = { version = "=0.21.1", default-features = false }
+pbkdf2 = { version = "=0.13.0", default-features = false, features = ["hmac"] }
+sha2 = "=0.11.0"
+zeroize = "=1.8.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

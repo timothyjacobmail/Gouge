@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PasswordVerificationCacheTest {
+    @Test fun unrelatedSlowVerificationDoesNotBlockAnAlreadyVerifiedCredential() {
+        val cache = PasswordVerificationCache()
+        assertTrue(cache.matches("ready", "salt", "hash", "password") { true })
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val slow = pool.submit<Boolean> {
+                cache.matches("slow", "salt", "hash", "other") {
+                    entered.countDown()
+                    check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    false
+                }
+            }
+            assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
+            val cached = pool.submit<Boolean> { cache.matches("ready", "salt", "hash", "password") { error("Cache missed") } }
+            assertTrue(cached.get(2, java.util.concurrent.TimeUnit.SECONDS))
+            release.countDown()
+            assertFalse(slow.get(2, java.util.concurrent.TimeUnit.SECONDS))
+        } finally { release.countDown(); pool.shutdownNow() }
+    }
     @Test fun repeatSuccessAvoidsExpensiveVerificationButEveryCredentialComponentIsBound() {
         val cache = PasswordVerificationCache()
         var calls = 0
