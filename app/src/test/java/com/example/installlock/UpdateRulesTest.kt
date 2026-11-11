@@ -5,7 +5,7 @@ import org.junit.Test
 
 class UpdateRulesTest {
     private val update = AppUpdate(6, "1.6", 30,
-        "https://github.com/timothyjacobmail/Install_Lock/releases/download/v1.6-debug/install-lock-debug.apk",
+        "https://github.com/timothyjacobmail/Gouge/releases/download/v1.6-debug/install-lock-debug.apk",
         "ab".repeat(32), 41_000_000)
 
     @Test fun allowsNewerDebugReleasesOnSupportedAndroid() {
@@ -31,11 +31,11 @@ class UpdateRulesTest {
         for (url in listOf(
             update.url.replace("https:", "http:"),
             update.url.replace("github.com", "github.com.evil.example"),
-            update.url.replace("Install_Lock", "another-app"),
+            update.url.replace("Gouge", "another-app"),
             update.url.replace("github.com/", "github.com:443/"),
             update.url.replace("github.com/", "name@github.com/"),
             update.url + "?download=elsewhere", update.url + "#fragment",
-            "https://github.com/timothyjacobmail/Install_Lock/releases/download/../evil/app.apk",
+            "https://github.com/timothyjacobmail/Gouge/releases/download/../evil/app.apk",
             "not a URL")) {
             assertFalse(url, UpdateRules.validAssetUrl(url))
         }

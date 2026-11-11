@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.InstallLock" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.Gouge" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/il_primary</item>
         <item name="colorOnPrimary">@color/il_on_primary</item>
         <item name="colorPrimaryContainer">@color/il_primary_container</item>

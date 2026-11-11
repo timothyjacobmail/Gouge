@@ -13,7 +13,7 @@ internal data class AppUpdate(
 
 /** Fail closed before downloading or submitting an APK to Android. */
 internal object UpdateRules {
-    const val REPOSITORY = "timothyjacobmail/Install_Lock"
+    const val REPOSITORY = "timothyjacobmail/Gouge"
     const val MAX_APK_BYTES = 150L * 1024 * 1024
 
     fun validAssetUrl(value: String): Boolean = runCatching {

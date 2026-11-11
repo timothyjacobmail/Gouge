@@ -54,6 +54,9 @@ object Policy {
         try {
             val manager = dpm(c)
             val receiver = admin(c)
+            val displayName = c.getString(R.string.app_name)
+            if (manager.getOrganizationName(receiver)?.toString() != displayName)
+                manager.setOrganizationName(receiver, displayName)
             val shortMessage = c.getString(R.string.policy_support_short)
             val longMessage = c.getString(R.string.policy_support_long)
             if (manager.getShortSupportMessage(receiver)?.toString() != shortMessage)

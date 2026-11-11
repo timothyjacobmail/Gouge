@@ -10,7 +10,7 @@ Gouge is an Android self-control app that uses **device-owner management** to de
 
 ## Installation
 
-Requires **Android 11 or later**. Download the current debug APK from [version 1.8.1](https://github.com/timothyjacobmail/Install_Lock/releases/tag/v1.8.1-debug-20261110). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
+Requires **Android 11 or later**. Download the current debug APK from [latest release](https://github.com/timothyjacobmail/Gouge/releases). Installing the APK and enrolling it as device owner are separate steps: the current app requires device-owner setup before its dashboard becomes available.
 
 ### Without resetting: a computer and USB debugging
 

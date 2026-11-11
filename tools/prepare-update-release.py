@@ -31,7 +31,7 @@ def main():
                 versionName=version['versionName'], minSdk=metadata['minSdkVersionForDexing'],
                 apkName=apk.name, sha256=digest.hex())
     (out / 'update.json').write_text(json.dumps(info, indent=2) + '\n', encoding='utf-8')
-    url = f'https://github.com/timothyjacobmail/Install_Lock/releases/download/{args.tag}/{apk.name}'
+    url = f'https://github.com/timothyjacobmail/Gouge/releases/download/{args.tag}/{apk.name}'
     payload = {
         'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.example.installlock/.AdminReceiver',
         'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': url,

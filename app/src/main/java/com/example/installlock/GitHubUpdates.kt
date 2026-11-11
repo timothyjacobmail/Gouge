@@ -208,7 +208,7 @@ internal object GitHubUpdates {
                 connection.instanceFollowRedirects = false
                 connection.connectTimeout = 15_000
                 connection.readTimeout = 30_000
-                connection.setRequestProperty("User-Agent", "InstallLock-Updater")
+                connection.setRequestProperty("User-Agent", "Gouge-Updater")
                 connection.setRequestProperty("Accept", if (url.host == "api.github.com") "application/vnd.github+json" else "application/octet-stream")
                 val status = connection.responseCode
                 if (status in listOf(301, 302, 303, 307, 308)) {

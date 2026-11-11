@@ -2,7 +2,7 @@
 
 Open **Settings & passwords → App updates**, or search for **App updates** on the dashboard. Tap **Check for updates**, then **Download and install** and confirm the version. A network connection is required. Checks and downloads run off the main thread, and remain active when the screen rotates or you navigate away while the process is running.
 
-The updater checks the newest 20 public GitHub releases in `timothyjacobmail/Install_Lock`, including prereleases because this project distributes debug builds. It reads up to 10 `update.json` assets and chooses the highest compatible version code greater than the installed version. Older releases without metadata are skipped. It never installs automatically just because an update check found a newer version.
+The updater checks the newest 20 public GitHub releases in `timothyjacobmail/Gouge`, including prereleases because this project distributes debug builds. It reads up to 10 `update.json` assets and chooses the highest compatible version code greater than the installed version. Older releases without metadata are skipped. It never installs automatically just because an update check found a newer version.
 
 Downloads use HTTPS and a bounded GitHub redirect allowlist. The updater verifies the exact APK size and SHA-256 hash, package ID, actual APK version code, Android requirement, and the installed app's signing certificates. Android's package installer then verifies the APK and updates the existing package. App data and device-owner enrollment are preserved. The original signing key must be retained; an APK signed with another debug keystore is rejected.
 

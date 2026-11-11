@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Install Lock"
+rootProject.name = "Gouge"
 include(":app")
 include(":secretvault")

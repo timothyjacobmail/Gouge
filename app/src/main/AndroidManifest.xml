@@ -22,7 +22,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/Theme.InstallLock">
+        android:theme="@style/Theme.Gouge">
 
         <activity android:name=".UpdateActivity" android:exported="false" />
         <activity android:name=".JudgeActivity" android:exported="false" />
@@ -77,6 +77,7 @@
 
         <receiver
             android:name=".AdminReceiver"
+            android:label="@string/app_name"
             android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
