@@ -1183,7 +1183,7 @@ class MainActivity : AppCompatActivity() {
                 val url = TemporaryLinkRules.normalize(address.text.toString())
                 when {
                     url == null -> msg.text = "Enter a full HTTP or HTTPS link without URL credentials."
-                    TemporaryLinks.all(this).any { it.url == url } -> msg.text = "This link is already in Temporary links."
+                    TemporaryLinks.all(this).any { TemporaryLinkRules.matches(it.url, url) } -> msg.text = "This link is already in Temporary links."
                     else -> confirmTask(TaskScope(TaskKind.WHITELIST_ADD), "Temporary link: $url (1 day after opening)",
                         mapOf("temporary" to true, "url" to url))
                 }

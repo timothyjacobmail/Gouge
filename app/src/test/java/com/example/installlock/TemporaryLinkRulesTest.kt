@@ -51,6 +51,43 @@ class TemporaryLinkRulesTest {
         assertTrue(TemporaryLinkRules.policyPatterns("https://example.com/path*").all { '*' !in it })
     }
 
+    @Test fun instagramPostShareTokenAndReelPresentationReferToTheSameApprovedContent() {
+        val shared = "https://www.instagram.com/p/AbC123/?xtok=share-token&img_index=1"
+        assertEquals("https://instagram.com/p/AbC123", TemporaryLinkRules.normalize(shared))
+        for (address in listOf("https://instagram.com/p/AbC123/", "https://www.instagram.com/reel/AbC123/",
+            "https://instagram.com/reels/AbC123/?xtok=another-token"))
+            assertTrue(address, TemporaryLinkRules.matches(shared, address))
+        val policy = TemporaryLinkRules.policyPatterns(shared)
+        assertEquals(6, policy.size)
+        assertTrue(policy.contains("https://.www.instagram.com:443/p/AbC123"))
+        assertTrue(policy.contains("https://.www.instagram.com:443/reel/AbC123"))
+        assertTrue(policy.none { '@' in it || "xtok" in it })
+    }
+
+    @Test fun instagramShareFixNeverApprovesAnotherShortcodeFeedHostOrScheme() {
+        val shared = "https://instagram.com/p/AbC123?xtok=tracking"
+        for (address in listOf("https://instagram.com/p/Other123/", "https://instagram.com/reel/abc123/",
+            "https://instagram.com/reels/AbC123other/", "https://instagram.com/p/AbC123/comments/",
+            "https://instagram.com/", "https://instagram.com/reels/", "https://other.instagram.com/p/AbC123/",
+            "https://instagram.com.example.com/p/AbC123/", "http://instagram.com/p/AbC123/",
+            "https://instagram.com:8443/p/AbC123/")) assertFalse(address, TemporaryLinkRules.matches(shared, address))
+        assertFalse(TemporaryLinkRules.matches("https://example.com/p/AbC123?xtok=one", "https://example.com/p/AbC123"))
+        assertFalse(TemporaryLinkRules.matches("https://instagram.com/accounts/login/?next=one", "https://instagram.com/accounts/login/"))
+        val guard = ChromeNavigationFilter(ChromeNavigationConfig(true, emptyList(), emptySet(), temporaryUrls = listOf(shared)))
+        assertNull(guard.block("https://www.instagram.com/reel/AbC123/"))
+        assertEquals(ChromeNavigationBlock.WHITELIST, guard.block("https://www.instagram.com/reel/Other123/"))
+    }
+
+    @Test fun openingUsesInstagramsCanonicalWwwPageWithoutRelyingOnAnApexRedirect() {
+        val original = "https://instagram.com/p/AbC123?xtok=tracking"
+        val destination = TemporaryLinkRules.openUrl(original)!!
+        assertEquals("https://www.instagram.com/p/AbC123/", destination)
+        assertTrue(TemporaryLinkRules.matches(original, destination))
+        assertEquals("https://www.instagram.com/reel/AbC123/", TemporaryLinkRules.openUrl(url))
+        assertEquals("https://example.com/watch?v=one", TemporaryLinkRules.openUrl("https://example.com/watch?v=one"))
+        assertNull(TemporaryLinkRules.openUrl("javascript:alert(1)"))
+    }
+
     @Test fun unsafeLinksAndLocalCallbacksAreRejected() {
         for (input in listOf("javascript:alert(1)", "https://user:secret@example.com/page", "https://localhost/callback?code=secret",
             "https://co.in/", "https://example.com:99999/", "https://example.com/%2e%2e/page", "https://example.com/a\\b"))

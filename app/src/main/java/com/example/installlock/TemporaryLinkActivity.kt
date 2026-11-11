@@ -68,7 +68,7 @@ class TemporaryLinkActivity : AppCompatActivity() {
                     Policy.syncChrome(this@TemporaryLinkActivity)
                     ScheduledTasks.reschedule(this@TemporaryLinkActivity)
                     try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(opened.url)).setPackage(Policy.CHROME))
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(TemporaryLinkRules.openUrl(opened.url))).setPackage(Policy.CHROME))
                         finish()
                     } catch (_: android.content.ActivityNotFoundException) { message.text = "Chrome could not open this link." }
                 })

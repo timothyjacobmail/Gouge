@@ -7,6 +7,9 @@ import java.util.Locale
 internal object TemporaryLinkRules {
     const val ACCESS_MS = 24 * 60 * 60_000L
     private val escape = Regex("%[0-9a-fA-F]{2}")
+    private val instagramPage = Regex("^/(?:p|reel|reels)/([A-Za-z0-9_-]{3,128})/?$")
+    private fun instagramId(uri: URI): String? = if (uri.host == "instagram.com")
+        instagramPage.matchEntire(uri.rawPath.orEmpty())?.groupValues?.get(1) else null
 
     fun normalize(input: String): String? = try {
         val text = input.trim()
@@ -25,7 +28,11 @@ internal object TemporaryLinkRules {
             }
             // Shared Instagram links often lose these tracking values after their first load.
             // Keep content IDs (e.g. YouTube's v=) so another video cannot inherit permission.
-            val query = uri.rawQuery?.split('&')?.filterNot { token ->
+            // Instagram identifies posts/reels by the shortcode in these paths. Share
+            // tokens such as xtok disappear on redirects and must not become required
+            // Chrome policy query tokens. Other sites retain their identifying query.
+            val instagramContent = host == "instagram.com" && instagramPage.matches(path)
+            val query = (if (instagramContent) null else uri.rawQuery)?.split('&')?.filterNot { token ->
                 val key = token.substringBefore('=').lowercase(Locale.ROOT)
                 key.startsWith("utm_") || key in setOf("igsh", "igshid", "fbclid", "gclid")
             }?.filter { it.isNotEmpty() }?.sorted()?.joinToString("&")?.takeIf { it.isNotEmpty() }
@@ -34,15 +41,36 @@ internal object TemporaryLinkRules {
         }
     } catch (_: Exception) { null }
 
-    fun matches(approved: String, address: String) = normalize(address)?.let { it == normalize(approved) } == true
+    fun matches(approved: String, address: String): Boolean {
+        val expected = normalize(approved) ?: return false
+        val actual = normalize(address) ?: return false
+        if (expected == actual) return true
+        val a = URI(expected)
+        val b = URI(actual)
+        val id = instagramId(a) ?: return false
+        return a.scheme == b.scheme && a.port == b.port && id == instagramId(b)
+    }
+
+    /** Open Instagram's canonical www URL directly instead of depending on an apex redirect. */
+    fun openUrl(input: String): String? {
+        val normalized = normalize(input) ?: return null
+        val uri = URI(normalized)
+        if (instagramId(uri) == null) return normalized
+        return "${uri.scheme}://www.instagram.com" + (if (uri.port == -1) "" else ":${uri.port}") + uri.rawPath + "/"
+    }
 
     /** Chrome uses prefix paths; the connected native URL monitor enforces the exact page. */
     fun policyPatterns(url: String): List<String> {
         val normalized = normalize(url) ?: return emptyList()
         val uri = URI(normalized)
         val port = if (uri.port == -1) if (uri.scheme == "https") 443 else 80 else uri.port
-        val suffix = ":$port${uri.rawPath}" + (uri.rawQuery?.let { "@$it" } ?: "")
-        return listOf("${uri.scheme}://.${uri.host}$suffix", "${uri.scheme}://.www.${uri.host}$suffix")
+        // A shared post can redirect to the reel presentation of the same shortcode.
+        val paths = instagramId(uri)?.let { id -> listOf("/p/$id", "/reel/$id", "/reels/$id") }
+            ?: listOf(uri.rawPath)
+        return paths.flatMap { path ->
+            val suffix = ":$port$path" + (uri.rawQuery?.let { "@$it" } ?: "")
+            listOf("${uri.scheme}://.${uri.host}$suffix", "${uri.scheme}://.www.${uri.host}$suffix")
+        }
     }
 }
 

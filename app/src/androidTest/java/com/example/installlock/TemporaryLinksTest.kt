@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
@@ -91,5 +92,23 @@ class TemporaryLinksTest {
         assertEquals("[]", blocked.getString("URLAllowlist"))
         val blockWww = ChromeRestrictions.update(Bundle(), true, emptyList(), listOf("www.instagram.com"), temporaryUrls = listOf(url))!!
         assertFalse(blockWww.getString("URLAllowlist")!!.contains(".www.instagram.com"))
+    }
+
+    @Test fun existingInstagramApprovalLosesShareTokenWithoutChangingExpiryOrStartingAnotherWait() {
+        val now = WatchdogStore.clock(c)
+        val original = TemporaryLink("existing-id", "https://instagram.com/p/AbC123?xtok=old-share-token",
+            now.wall + 60_000, now.elapsed + 60_000, now.boot, true)
+        c.getSharedPreferences("temporary_links", 0).edit().putString(original.id,
+            JSONObject().put("id", original.id).put("url", original.url).put("wall", original.expiresWall)
+                .put("elapsed", original.expiresElapsed).put("boot", original.boot).put("notified", true).toString()).commit()
+        val restored = TemporaryLinks.all(c, now).single()
+        assertEquals(original.copy(url = "https://instagram.com/p/AbC123"), restored)
+        assertTrue(TemporaryLinks.approve(c, "https://www.instagram.com/reel/AbC123/?xtok=new-token"))
+        assertEquals(restored, TemporaryLinks.all(c, now).single())
+        val policy = ChromeRestrictions.update(Bundle(), true, emptyList(), temporaryUrls = listOf(restored.url))!!
+        val values = JSONArray(policy.getString("URLAllowlist")).let { a -> (0 until a.length()).map { a.getString(it) } }
+        assertTrue(values.contains("https://.www.instagram.com:443/p/AbC123"))
+        assertTrue(values.contains("https://.www.instagram.com:443/reel/AbC123"))
+        assertTrue(values.none { "xtok" in it })
     }
 }

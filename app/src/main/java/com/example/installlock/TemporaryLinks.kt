@@ -31,7 +31,7 @@ internal object TemporaryLinks {
     @Synchronized fun approve(c: Context, input: String): Boolean {
         val url = TemporaryLinkRules.normalize(input) ?: return false
         // A second completed request must not restart an existing access window.
-        if (all(c).any { it.url == url }) return true
+        if (all(c).any { TemporaryLinkRules.matches(it.url, url) }) return true
         return save(c, TemporaryLink(UUID.randomUUID().toString(), url))
     }
 
