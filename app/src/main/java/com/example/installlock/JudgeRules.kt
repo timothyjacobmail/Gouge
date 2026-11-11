@@ -55,8 +55,16 @@ internal object JudgeRules {
 
     fun leisureHost(host: String, extra: Set<String> = emptySet()): Boolean {
         val normalized = DomainRules.normalizeHost(host) ?: return true
-        return (leisureDomains + extra).any { normalized == it || normalized.endsWith(".$it") } ||
-            leisureWords.containsMatchIn(normalized.replace('.', ' ').replace('-', ' '))
+        // Match only complete DNS-label suffixes without copying/scanning the
+        // whole catalog for every approved host and every protection sweep.
+        var candidate = normalized
+        while (true) {
+            if (candidate in leisureDomains || candidate in extra) return true
+            val dot = candidate.indexOf('.')
+            if (dot < 0) break
+            candidate = candidate.substring(dot + 1)
+        }
+        return leisureWords.containsMatchIn(normalized.replace('.', ' ').replace('-', ' '))
     }
 
     fun unsafeRoute(address: String): Boolean = runCatching {

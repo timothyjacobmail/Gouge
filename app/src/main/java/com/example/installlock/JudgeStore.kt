@@ -5,7 +5,7 @@ import android.os.SystemClock
 import java.util.concurrent.Executors
 
 internal object JudgeStore {
-    private val snapshots = ParsedValueCache<JudgePreferences, JudgePreferences> { it }
+    private val snapshots = ParsedValueCache<JudgePolicyInputs, JudgePreferences> { it.compile() }
     @Volatile private var engineRevision: String? = null
     private val refreshExecutor = Executors.newSingleThreadExecutor()
     private val attempts = mutableMapOf<String, Pair<String, Long>>()
@@ -13,7 +13,7 @@ internal object JudgeStore {
     private fun prefs(c: Context) = c.getSharedPreferences("website_judge", Context.MODE_PRIVATE)
     fun snapshot(c: Context): JudgePreferences {
         val now = System.currentTimeMillis()
-        return snapshots.get(JudgePreferences(
+        return snapshots.get(JudgePolicyInputs(
             approvedPatterns = Store.sites(c).filter { it.activeAt <= now }.map { it.pattern },
             blockedWords = Store.browserKeywords(c), wordExceptions = Store.keywordExceptions(c),
             pageExceptions = Store.genericKeywordExceptions(c),

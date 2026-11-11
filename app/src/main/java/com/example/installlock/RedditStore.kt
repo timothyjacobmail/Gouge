@@ -53,7 +53,8 @@ internal object RedditStore {
 
     private var refreshedAt: Long? = null
     private val inspected = mutableSetOf<String>()
-    @Synchronized fun invalidate() { refreshedAt = null; inspected.clear() }
+    private val labels = PackageLabelCache()
+    @Synchronized fun invalidate() { refreshedAt = null; inspected.clear(); labels.clear() }
 
     /** Specific Reddit link filters catch renamed clients; generic browsers are excluded. */
     @Synchronized fun discover(c: Context, installed: List<PackageInfo>? = null) {
@@ -68,12 +69,17 @@ internal object RedditStore {
                     (0 until filter.countDataAuthorities()).any { RedditRules.redditHost(filter.getDataAuthority(it).host) }
                 } == true }.map { it.activityInfo.packageName }
         }.toSet() - BrowserPackages.discover(c)
-        val found = (installed ?: pm.getInstalledPackages(0)).mapNotNull { pkg ->
+        val packages = installed ?: pm.getInstalledPackages(0)
+        labels.retain(packages.map { it.packageName }.toSet())
+        val locales = c.resources.configuration.locales.toLanguageTags()
+        val knownTargets = targets(c)
+        val found = packages.mapNotNull { pkg ->
             val info = pkg.applicationInfo ?: return@mapNotNull null
             if (pkg.packageName == c.packageName) return@mapNotNull null
-            val label = info.loadLabel(pm).toString()
+            val label = labels.get(PackageLabelKey(pkg.packageName, pkg.firstInstallTime, pkg.lastUpdateTime,
+                info.labelRes, info.nonLocalizedLabel?.toString(), locales)) { info.loadLabel(pm).toString() }
             // Repackaged official clients often retain the original resource namespace.
-            val original = if (pkg.packageName in inspected || pkg.packageName in targets(c)) false else try {
+            val original = if (pkg.packageName in inspected || pkg.packageName in knownTargets) false else try {
                 pm.getResourcesForApplication(info).getIdentifier("app_name", "string", RedditRules.OFFICIAL) != 0
             } catch (_: Exception) { false }
             inspected.add(pkg.packageName)

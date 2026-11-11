@@ -39,3 +39,40 @@ On Windows, with a JDK, Android platform/build tools and optionally an ADB-conne
 ```
 
 The phone run uploads a uniquely named benchmark DEX under `/data/local/tmp` and removes that exact file afterward. It does not install instrumentation, change Gouge preferences or stop its services. Normalization is reported separately from normalized-page matching so the ratios cannot be mistaken for end-to-end speedups.
+
+## Background profiling and Rust evaluation in 1.9.6
+
+The user requested a live profile focused on general speed and battery use, with Rust adopted only if it provides a worthwhile speed improvement. Android's installed Simpleperf profiled the debuggable app without root, new instrumentation or changes to protection intervals. Three 40-second `cpu-clock` recordings at 499 Hz captured call stacks. Kernel addresses were restricted; application stacks were available and no samples were lost. See [Android application profiling](https://android.googlesource.com/platform/system/extras/+/master/simpleperf/doc/android_application_profiling.md).
+
+The profile found two avoidable costs:
+
+1. `JudgeStore` compared complete `JudgePreferences` objects *after* their constructors had derived host approvals and compiled filters. Equal inputs therefore still repeated the expensive work. The cache now compares plain `JudgePolicyInputs` first, compiling only on a changed key. All rule inputs, ordered domain rules, currently active site approvals and engine revision remain part of that key; there is no time-to-live or listener delay.
+2. `RedditStore.discover` reloaded every installed app's label through Android/Vivo resources on each discovery pass. A bounded cache now keeps one current label per package, keyed by install/update time, resource/literal label and locale. Package invalidation clears it; missing packages are pruned. Discovery still checks current metadata and link handlers at its existing interval. Cached labels are classification metadata, never authorization.
+
+Leisure-domain matching also stopped copying/scanning the entire catalog for each host. It checks exact DNS-label suffixes using existing sets. A compiled policy reuses its host keyword matcher and ordered domain matcher instead of rebuilding them for each host.
+
+| Inclusive sampled CPU share | Original 1.9.5 | Judge fix only | Both fixes |
+| --- | ---: | ---: | ---: |
+| `JudgeStore.snapshot` | 15.36% | 1.43% | 0.72% |
+| `JudgeRules.leisureHost` | 11.70% | 0.26% | 0.21% |
+| `RedditStore.discover` | 23.87% | 34.81% | 0.42% |
+| `Policy.reconcile` | 49.20% | 56.06% | 16.23% |
+| Play category fetch | 30.13% | Below 0.1% report threshold | 45.36% |
+
+Inclusive rows overlap and must not be summed. Estimated sampled CPU totals for the three 40-second recordings were 4.643, 3.074 and 4.754 seconds. Multiplying those totals by inclusive shares estimates about 2.285 versus 0.772 seconds inside `Policy.reconcile` before/after both fixes, roughly 66% lower within that path. Whole-process sampled CPU did **not** decrease in the final recording because background network work increased. Separate 30-second task-clock observations were 5.072 seconds before and 1.360 seconds after, but those are observations of variable workloads, not a controlled percentage improvement.
+
+The screen was asleep during the captures. Browser accessibility was off initially and enabled later during the session; profiling did not toggle it. The phone was charging, network activity varied, and these are debug-build measurements. Consequently no battery-life, discharge-rate or universal responsiveness claim is made. An active-browsing workload was not profiled in this investigation.
+
+Decision: **do not add Rust for these findings**. Reimplementing repeated work in Rust would still repeat it; caching removes that work entirely on unchanged inputs. Android package/resource/Binder calls and HTTPS connection activity remain prominent, and their platform costs cannot be removed by rewriting the caller. This investigation did not establish a remaining native-compute kernel worth a JNI boundary, so no Rust prototype was integrated and no Rust-vs-Java timing claim is made. A future isolated CPU-heavy hotspot can be compared with Rust using end-to-end marshalling costs. Rust's [Android target support](https://doc.rust-lang.org/rustc/platform-support/android.html) permits such a component; the decision here is based on workload, not language availability.
+
+All 372 JVM tests pass, including immediate invalidation of every Judge policy input, exact domain boundaries, unchanged-input reuse, and package label update/reinstall/locale invalidation. App and Android test APKs compile. The final update was installed in place on the Vivo phone.
+
+Sanitized method-level evidence: [original](performance/background-before-20261111.txt), [Judge cache fix](performance/background-judge-cache-20261111.txt), [both fixes](performance/background-final-20261111.txt). Raw stack recordings stay outside version control and are removed from the phone after reporting.
+
+To repeat a bounded recording (10–60 seconds):
+
+```powershell
+./tools/perf/profile-background.ps1 -SdkRoot YOUR_ANDROID_SDK -Device YOUR_SERIAL -Seconds 40 -Label background
+```
+
+The script saves the textual report under `build/profiles` and deletes only its uniquely named remote recording afterward.

@@ -17,6 +17,8 @@ internal data class JudgePreferences(
     val engineRevision: String = "personalized-v1"
 ) {
     private val genericLabels = setOf("www", "com", "co", "org", "net", "gov", "edu", "ac", "docs", "support", "auth", "accounts", "mail", "one", "setup", "faq")
+    private val hostKeywordMatcher = KeywordMatcher(blockedWords)
+    private val orderedDomains = DomainRules(domainRules)
     private val wholeSiteHosts: Set<String> = approvedPatterns.mapNotNull { pattern ->
         val uri = JudgeRules.webUri(pattern) ?: return@mapNotNull null
         if (uri.path !in setOf("", "/") || uri.query != null) return@mapNotNull null
@@ -25,8 +27,8 @@ internal data class JudgePreferences(
         uri.host.takeUnless { host -> JudgeRules.leisureHost(host, leisureCatalog) ||
             extraLocks.any { host == it || host.endsWith(".$it") } ||
             dnsBlocks.any { host == it || host.endsWith(".$it") } ||
-            DomainRules(domainRules).match(host)?.rule?.action == DomainAction.BLOCK ||
-            keywordFilterEnabled && KeywordMatcher(blockedWords).findMatch(host.replace('.', ' ').replace('-', ' ')) != null }
+            orderedDomains.match(host)?.rule?.action == DomainAction.BLOCK ||
+            keywordFilterEnabled && hostKeywordMatcher.findMatch(host.replace('.', ' ').replace('-', ' ')) != null }
     }.toSet()
     // The existing whole-domain permission already includes its conventional www host.
     // Do not derive arbitrary sibling/child hosts from a completed approval.
@@ -34,8 +36,8 @@ internal data class JudgePreferences(
         .map { "www.$it" }).filter { host ->
         !JudgeRules.leisureHost(host, leisureCatalog) && extraLocks.none { host == it || host.endsWith(".$it") } &&
             dnsBlocks.none { host == it || host.endsWith(".$it") } &&
-            DomainRules(domainRules).match(host)?.rule?.action != DomainAction.BLOCK &&
-            (!keywordFilterEnabled || KeywordMatcher(blockedWords).findMatch(host.replace('.', ' ').replace('-', ' ')) == null)
+            orderedDomains.match(host)?.rule?.action != DomainAction.BLOCK &&
+            (!keywordFilterEnabled || hostKeywordMatcher.findMatch(host.replace('.', ' ').replace('-', ' ')) == null)
     }.toSet()
     val eligibleHosts: Set<String> = JudgeRules.reviewedHosts + learnedHosts
     private val keywordFilter = KeywordPageFilter(blockedWords, wordExceptions, pageExceptions)
@@ -56,11 +58,11 @@ internal data class JudgePreferences(
         if (JudgeRules.leisureHost(uri.host, leisureCatalog)) return "Leisure sites keep the normal approval delay."
         if (extraLocks.any { uri.host == it || uri.host.endsWith(".$it") }) return "Your extra locked sites block this host."
         if (dnsBlocks.any { uri.host == it || uri.host.endsWith(".$it") }) return "Your Google DNS blocklist excludes this host from Judge."
-        if (DomainRules(domainRules).match(uri.host)?.rule?.action == DomainAction.BLOCK)
+        if (orderedDomains.match(uri.host)?.rule?.action == DomainAction.BLOCK)
             return "Your first matching domain rule blocks this host."
         if (keywordFilterEnabled) {
             // A URL must not satisfy its own context exception using arbitrary query text.
-            val hostWord = KeywordMatcher(blockedWords).findMatch(uri.host.replace('.', ' ').replace('-', ' '))
+            val hostWord = hostKeywordMatcher.findMatch(uri.host.replace('.', ' ').replace('-', ' '))
             if (hostWord != null) return "Your blocked word '$hostWord' matches this host."
             if (text != null) keywordFilter.findBlock(text)?.let { return "Your blocked word '$it' matches this page without an applicable exception." }
         }

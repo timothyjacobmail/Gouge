@@ -1,0 +1,35 @@
+Inclusive sampled CPU shares; child rows overlap and must not be summed.
+Arch: arm64
+Event: cpu-clock (type 1, config 0)
+Samples: 2317
+Event count: 4643286536
+Children  Self   Symbol
+50.24%    0.00%  com.example.installlock.LockService$tick$1.run
+49.20%    0.09%  com.example.installlock.Policy.reconcile
+49.20%    0.00%  com.example.installlock.Policy.reconcile$default
+49.20%    0.00%  com.example.installlock.Policy.sweep
+30.64%    0.00%  com.example.installlock.PlayCategoryLookup$$ExternalSyntheticLambda1.invoke
+30.64%    0.00%  com.example.installlock.PlayCategoryLookup$Request.run
+30.64%    0.00%  com.example.installlock.PlayCategoryLookup.category$lambda$6$lambda$5
+30.13%    0.00%  com.example.installlock.PlayCategoryLookup.fetchCategory
+30.04%    0.00%  com.example.installlock.PlayCategoryLookup.fetchListingCategory
+23.87%    0.00%  com.example.installlock.RedditStore.discover
+15.93%    0.00%  com.example.installlock.Policy.syncChrome
+15.93%    0.00%  com.example.installlock.Policy.syncChrome$default
+15.36%    0.00%  com.example.installlock.JudgeStore.eligible
+15.36%    0.00%  com.example.installlock.JudgeStore.snapshot
+15.24%    0.04%  com.example.installlock.JudgePreferences.<init>
+11.70%    0.39%  com.example.installlock.JudgeRules.leisureHost
+5.83%     0.00%  android.app.ApplicationPackageManager.getInstalledPackages
+5.83%     0.00%  android.app.ApplicationPackageManager.getInstalledPackagesAsUser
+2.03%     0.00%  com.example.installlock.DomainRules$Companion.normalizeHost
+1.90%     0.00%  com.example.installlock.BankingCategoryDiscovery$$ExternalSyntheticLambda0.run
+1.90%     0.00%  com.example.installlock.BankingCategoryDiscovery.refresh$lambda$7
+1.21%     0.00%  com.example.installlock.KeywordMatcher.<init>
+0.86%     0.00%  com.example.installlock.JudgeRules.webUri
+0.82%     0.00%  com.example.installlock.RedditRules.likelyClient
+0.78%     0.00%  com.example.installlock.DomainRules.match
+0.73%     0.00%  com.example.installlock.BrowserPackages.discover
+0.73%     0.00%  com.example.installlock.KeywordMatcher$Companion.normalizeWord
+0.65%     0.00%  com.example.installlock.BankingAppStore.reconcile
+0.65%     0.00%  com.example.installlock.Policy.isOwner
