@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.installlock"
         minSdk = 30
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.9.2"
+        versionCode = 16
+        versionName = "1.9.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

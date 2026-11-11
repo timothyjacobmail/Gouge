@@ -80,6 +80,7 @@ class LockService : Service() {
                 SecretClipboard.reconcile()
                 Store.applyDueKeywordRemovals(this@LockService)
                 ScheduledTasks.reconcileAsync(this@LockService)
+                RetiredFeatureCleanup.schedule(this@LockService)
                 next = minOf(next, scheduleBoundary(),
                     Store.timingConfig(this@LockService).milliseconds(TimingOption.POLICY_INTERVAL))
             } catch (e: RuntimeException) {
