@@ -60,7 +60,7 @@ class LockService : Service() {
             alarms.cancel(boundaryAlarm)
             // Listener alarms need no exact-alarm permission. Screen-on reconciles immediately
             // after Doze, and service/boot restarts recreate this process-owned alarm.
-            alarms.setExact(AlarmManager.RTC_WAKEUP, next, "Install Lock curfew", boundaryAlarm, handler)
+            alarms.setExact(AlarmManager.RTC_WAKEUP, next, "Gouge curfew", boundaryAlarm, handler)
             scheduledBoundary = next
         }
         return (next - now).coerceAtLeast(100L)
@@ -103,7 +103,7 @@ class LockService : Service() {
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel("enforcement_v2", "Install Lock protection", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel("enforcement_v2", "Gouge protection", NotificationManager.IMPORTANCE_LOW)
         )
         val n = Notification.Builder(this, "enforcement_v2")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
@@ -145,7 +145,7 @@ class LockService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Includes opening Install Lock, boot, and sticky restarts after process death.
+        // Includes opening Gouge, boot, and sticky restarts after process death.
         EnforcementRecovery.arm(this, force = true)
         try { Policy.apply(this) }
         catch (e: RuntimeException) { Log.e("InstallLock", "Could not refresh device-owner protection", e) }

@@ -83,7 +83,7 @@ object SecretClipboard {
         }
     }
 
-    /** Called by Install Lock's existing accessibility service; no extra service is enabled. */
+    /** Called by Gouge's existing accessibility service; no extra service is enabled. */
     fun attachAccessibility(context: Context, changed: () -> Unit, focus: () -> Unit) {
         initialize(context)
         monitoringChanged = changed
@@ -115,14 +115,14 @@ object SecretClipboard {
         val dialog = AlertDialog.Builder(context)
             .setTitle("Password copied")
             .setMessage("How long do you want the password in your clipboard?\n\n" +
-                "Until pasted needs Install Lock accessibility. If a paste cannot be detected, " +
+                "Until pasted needs Gouge accessibility. If a paste cannot be detected, " +
                 "it clears after 10 minutes. Android may clear earlier. Closing this prompt without a choice clears the copy.\n\n" +
                 "Passwords are marked sensitive. Gboard's saved or pinned clipboard history cannot be deleted by this app. " +
                 "Android may briefly show a cleanup screen. If Android prevents automatic cleanup, tap the cleanup notification.")
             .setPositiveButton("Until pasted") { _, _ ->
                 chosen = select(token, ClipboardLifetime.UNTIL_PASTED)
                 result(if (!chosen) "Copy expired. Copy the password again."
-                    else if (requestFocus == null) "Copied for up to 10 minutes. Paste detection needs Install Lock accessibility enabled."
+                    else if (requestFocus == null) "Copied for up to 10 minutes. Paste detection needs Gouge accessibility enabled."
                     else "Copied until a paste is detected (10-minute maximum).")
             }
             .setNeutralButton("5 min") { _, _ ->
@@ -247,6 +247,6 @@ object SecretClipboard {
                 .setSmallIcon(android.R.drawable.ic_lock_lock).setContentTitle("Clear copied password")
                 .setContentText("Tap to finish clipboard cleanup if Android prevents automatic cleanup.")
                 .setContentIntent(action).setAutoCancel(true).setOnlyAlertOnce(true).build())
-        } catch (_: SecurityException) { /* Reconcile when Install Lock next regains focus. */ }
+        } catch (_: SecurityException) { /* Reconcile when Gouge next regains focus. */ }
     }
 }

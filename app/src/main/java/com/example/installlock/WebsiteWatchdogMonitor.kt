@@ -87,7 +87,7 @@ internal class WebsiteWatchdogMonitor(
                 Policy.sweep(service)
                 LockService.start(service)
                 Toast.makeText(service, "30-minute manga/comics cooldown. Browsers, Google, YouTube, Instagram, Reddit and app installs are locked. " +
-                    "Open Install Lock for details.", Toast.LENGTH_LONG).show()
+                    "Open Gouge for details.", Toast.LENGTH_LONG).show()
             } else {
                 val stage = CategoryWatchdog.warning(state)
                 if (stage == 0) hideBanner() else showBanner(stage)

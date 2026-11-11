@@ -104,6 +104,6 @@ internal object BankingMode {
         LockService.start(c)
         Policy.sweep(c)
         return if (restored) "Banking mode finished. Previously enabled services are reconnecting."
-            else "Banking mode finished. Re-enable Install Lock's services in Android accessibility settings."
+            else "Banking mode finished. Re-enable Gouge's services in Android accessibility settings."
     }
 }

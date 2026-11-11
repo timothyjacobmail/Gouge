@@ -29,10 +29,10 @@ data class AppLockReasons(
             categoryCooldownUntil != null || categoryServiceMissing || focusUntil != null || bankingListUntil != null || redditServiceMissing || playStoreServiceMissing
 
     fun descriptions(): List<String> = buildList {
-        if (playStoreServiceMissing) add("Play Store's two-minute opening delay needs Install Lock's accessibility service. Enable it and finish banking mode to open Play Store.")
-        if (redditServiceMissing) add("The subreddit allowlist requires Install Lock's accessibility service. " +
+        if (playStoreServiceMissing) add("Play Store's two-minute opening delay needs Gouge's accessibility service. Enable it and finish banking mode to open Play Store.")
+        if (redditServiceMissing) add("The subreddit allowlist requires Gouge's accessibility service. " +
             "Reddit and registered Reddit clients stay locked while monitoring is disconnected, including during banking mode. " +
-            "Re-enable Install Lock accessibility to restore access to allowed communities.")
+            "Re-enable Gouge accessibility to restore access to allowed communities.")
         bankingListUntil?.let {
             val end = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
             add("This app was added to the banking/Finance list. Its 15-minute wait ends at $end. " +
@@ -49,28 +49,28 @@ data class AppLockReasons(
                 else "Manga/comics category cooldown until $end: a categorized website remained visible for 10 seconds. ") +
                 "Browsers, Google, YouTube, Instagram, Reddit and app installations are locked for 30 minutes. App passwords cannot bypass this cooldown.")
         }
-        if (bankingMode && categoryServiceMissing) add("Banking mode has paused Install Lock's accessibility services. " +
+        if (bankingMode && categoryServiceMissing) add("Banking mode has paused Gouge's accessibility services. " +
             "Browsers, Google, YouTube, Instagram and Reddit stay locked while monitoring is off. " +
             "Open Banking mode and finish banking to restore the previously enabled services.")
-        else if (categoryServiceMissing) add("The website and rapid-scrolling watchdogs require Install Lock's accessibility service. " +
+        else if (categoryServiceMissing) add("The website and rapid-scrolling watchdogs require Gouge's accessibility service. " +
             "Browsers, Google, YouTube, Instagram and Reddit stay locked until the service is connected.")
         curfewUntil?.let {
             val end = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
             add("Night curfew is active until $end. Curfew overrides temporary app unlocks, whitelists and category exemptions. " +
                 "Only an appeal submitted before 9 pm can postpone that night's start to midnight.")
         }
-        if (domainServiceMissing && !bankingMode) add("Ordered domain rules require Install Lock's browser accessibility service. " +
+        if (domainServiceMissing && !bankingMode) add("Ordered domain rules require Gouge's browser accessibility service. " +
                 if (accessibilityEnabled) "The service is enabled but has not connected; wait for it or re-enable it."
                 else "The service is disabled. Enable it in Android Accessibility settings.")
-        if (googleVpnMissing) add("Install Lock's built-in VPN is not running. " +
-                "Open Google VPN filter in Install Lock and turn it on. Google requires this VPN even during a temporary app unlock.")
+        if (googleVpnMissing) add("Gouge's built-in VPN is not running. " +
+                "Open Google VPN filter in Gouge and turn it on. Google requires this VPN even during a temporary app unlock.")
         if (keywordServiceMissing && !bankingMode) add(
             if (accessibilityEnabled)
                 "The browser and Google keyword accessibility service is enabled but has not connected. " +
                         "Wait for it to connect, or re-enable it in Android Accessibility settings."
             else
                 "The browser and Google keyword accessibility setting is disabled. " +
-                        "Enable Install Lock's browser and Google keyword service in Android Accessibility settings."
+                        "Enable Gouge's browser and Google keyword service in Android Accessibility settings."
         )
         if (appLock) add("This app is selected in App locks and has no active temporary unlock. " +
                 "Use this app's temporary-access password to unlock only this app, or its separate removal password to remove its manual lock.")
@@ -84,7 +84,7 @@ data class AppLockReasons(
                 "Re-enable Curbox, or use the Curbox-off task password to turn off the Curbox guard.")
         neverInstallRule?.let {
             add("Its app name or package matches the never-install rule \"$it\". " +
-                    "Install Lock also attempts to uninstall it; removing this rule requires the never-install removal task password.")
+                    "Gouge also attempts to uninstall it; removing this rule requires the never-install removal task password.")
         }
     }
 }
@@ -101,7 +101,7 @@ data class AppLockStatus(
     fun explanation(): String {
         val heading = when (suspended) {
             true -> if (reasons.shouldLock) "$appName is locked because:" else
-                "$appName is still locked, but no current Install Lock rule requires it. " +
+                "$appName is still locked, but no current Gouge rule requires it. " +
                         "Tap Refresh to retry releasing it. Android may also have another restriction."
             false -> if (reasons.shouldLock) "$appName has a lock pending. Android has not applied it yet. Reasons:" else
                 "$appName has no active app lock."

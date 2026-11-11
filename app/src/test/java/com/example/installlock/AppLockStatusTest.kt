@@ -49,7 +49,7 @@ class AppLockStatusTest {
         val stuck = status(AppLockReasons(), true)
         assertTrue(stuck.needsAttention)
         assertTrue(stuck.explanation().contains("still locked"))
-        assertTrue(stuck.explanation().contains("no current Install Lock rule"))
+        assertTrue(stuck.explanation().contains("no current Gouge rule"))
         assertTrue(stuck.reasons.descriptions().isEmpty())
     }
 

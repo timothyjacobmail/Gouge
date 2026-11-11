@@ -28,7 +28,7 @@ internal object GitHubUpdates {
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val listeners = CopyOnWriteArraySet<(UpdateState) -> Unit>()
-    @Volatile var state = UpdateState("Check GitHub for a newer version of Install Lock.")
+    @Volatile var state = UpdateState("Check GitHub for a newer version of Gouge.")
         private set
     private fun prefs(c: Context) = c.getSharedPreferences("app_updates", Context.MODE_PRIVATE)
 

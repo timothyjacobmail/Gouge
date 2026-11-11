@@ -51,7 +51,7 @@ class UpdateActivity : AppCompatActivity() {
             setPadding(UiStyle.dp(this@UpdateActivity, 20), UiStyle.dp(this@UpdateActivity, 24), UiStyle.dp(this@UpdateActivity, 20), UiStyle.dp(this@UpdateActivity, 24))
             addView(UiStyle.label(this@UpdateActivity, "App updates", 26f))
             addView(UiStyle.label(this@UpdateActivity, "Installed: ${version.versionName} (${version.longVersionCode})"))
-            addView(UiStyle.label(this@UpdateActivity, "Updates come from Install Lock’s GitHub releases, including debug releases. Your existing protections stay active."))
+            addView(UiStyle.label(this@UpdateActivity, "Updates come from Gouge’s GitHub releases, including debug releases. Your existing protections stay active."))
             addView(status); addView(progress); addView(check); addView(install); addView(confirm)
             addView(UiStyle.button(this@UpdateActivity, "Back") { finish() })
         }

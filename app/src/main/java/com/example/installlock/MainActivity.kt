@@ -130,7 +130,7 @@ class MainActivity : AppCompatActivity() {
                     "Open Extra locked sites to see removal deadlines."
         ))
         if (websiteRules.isNotEmpty()) views.add(section("Website rules", "Chrome whitelist and extra site locks", *websiteRules.toTypedArray()))
-        if (statuses.none { it.needsAttention }) views.add(label("No app is currently locked by Install Lock."))
+        if (statuses.none { it.needsAttention }) views.add(label("No app is currently locked by Gouge."))
         for (status in statuses) {
             val summary = when {
                 status.reasons.shouldLock && status.suspended == true -> "Locked"
@@ -333,7 +333,7 @@ class MainActivity : AppCompatActivity() {
         col.setPadding(dp(16), dp(16), dp(16), dp(16))
         col.addView(label("Prevent uninstall & force stop", 22f))
         col.addView(label("Ticked apps can't be uninstalled, force-stopped or have their data cleared. " +
-                "Install Lock is always protected. Unticking an app uses its saved password delay."))
+                "Gouge is always protected. Unticking an app uses its saved password delay."))
         col.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         col.addView(save)
         col.addView(cancel)
@@ -422,14 +422,14 @@ class MainActivity : AppCompatActivity() {
             }
             status.text = when {
                 !BankingMode.active(this) -> "Accessibility is controlled manually. Turn it off before banking and back on afterward."
-                BankingMode.servicesStillEnabled(this) -> "Waiting for Install Lock accessibility to switch off. " +
+                BankingMode.servicesStillEnabled(this) -> "Waiting for Gouge accessibility to switch off. " +
                     "If needed, switch off its services in Android accessibility settings."
-                else -> "Install Lock accessibility is off. It stays off until you manually turn it back on."
+                else -> "Gouge accessibility is off. It stays off until you manually turn it back on."
             }
         }
         refreshStatus()
         screen(label("Banking mode", 24f), status,
-            label("Use the button below to turn Install Lock accessibility off or back on. Opening or closing an app does not change it."),
+            label("Use the button below to turn Gouge accessibility off or back on. Opening or closing an app does not change it."),
             label("New banking/Finance list entries wait 15 minutes before the app can open. " +
                 "Changing accessibility, using a temporary app password or removing an entry cannot skip a running wait. " +
                 "Entries already on your list keep their eligibility."),
@@ -447,8 +447,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }.apply { isEnabled = Policy.isOwner(this@MainActivity) },
             label(if (BackgroundPowerProtection.canMaintainGuard(this))
-                "Turning accessibility back on restores the Install Lock services enabled before banking."
-                else "After finishing banking, re-enable Install Lock services manually in Android accessibility settings."),
+                "Turning accessibility back on restores the Gouge services enabled before banking."
+                else "After finishing banking, re-enable Gouge services manually in Android accessibility settings."),
             section("Banking/Finance list", "New entries wait 15 minutes", listRows),
             section("List settings", "Finance detection and manual additions",
                 financeDetection, categoryStatus,
@@ -599,7 +599,7 @@ class MainActivity : AppCompatActivity() {
                 val installsBlocked = getSystemService(android.os.UserManager::class.java)
                     .hasUserRestriction(android.os.UserManager.DISALLOW_INSTALL_APPS)
                 status.append(if (installsBlocked) "\nAndroid confirms the installation restriction is active."
-                    else "\nAndroid installation restriction is pending; Install Lock will retry.")
+                    else "\nAndroid installation restriction is pending; Gouge will retry.")
             }
             if (!BrowserKeywordService.isReady(this)) status.append("\nAccessibility monitoring is disconnected. Browsers, Google, YouTube, Instagram and Reddit remain locked until it reconnects.")
         }
@@ -683,7 +683,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDashboard() {
-        val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), label("Install Lock", 26f),
+        val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), label("Gouge", 26f),
             label("Confirm a sensitive change to apply it after its saved password delay."),
             button("Pending tasks") { goTo { showScheduledTasks() } },
             button("Personal secret vault (optional)") { startActivity(Intent(this, com.example.delayedsecrect.MainActivity::class.java)) },
@@ -710,8 +710,8 @@ class MainActivity : AppCompatActivity() {
                 button("About & licenses") { goTo { showAbout() } }),
             section("Protection status", "Other protections continue during temporary app access",
                 label(unlockStatus()), label(chromeLockExplanation(Policy.lockStatuses(this))), label(playAccessSummary()),
-                label(if (BatteryProtection.exempt(this)) "Battery optimization is disabled for Install Lock."
-                    else "Battery optimization can interrupt background protection. Disable it for Install Lock."),
+                label(if (BatteryProtection.exempt(this)) "Battery optimization is disabled for Gouge."
+                    else "Battery optimization can interrupt background protection. Disable it for Gouge."),
                 label(BackgroundPowerProtection.summary(this)),
                 button("Disable battery optimization") { BatteryProtection.request(this) }
                     .apply { visibility = if (BatteryProtection.exempt(this@MainActivity)) View.GONE else View.VISIBLE }))
@@ -922,13 +922,13 @@ class MainActivity : AppCompatActivity() {
         fun updateStatus() {
             if (!statusUpdatesActive || !status.isAttachedToWindow) return
             status.text = if (DnsFilterService.isReady(this))
-                "Install Lock VPN: running. Other app locks and keyword protection still apply."
-            else "Install Lock VPN: not running. Google remains locked until this VPN is running."
+                "Gouge VPN: running. Other app locks and keyword protection still apply."
+            else "Gouge VPN: not running. Google remains locked until this VPN is running."
             status.postDelayed({ updateStatus() }, 1000)
         }
         screen(
             label("Google VPN filter", 22f),
-            label("Routes only the Google app's DNS lookups through Install Lock and refuses " +
+            label("Routes only the Google app's DNS lookups through Gouge and refuses " +
                     "the servers that serve images and videos, plus domains blocked by your ordered domain rules. Other apps aren't affected. " +
                     "Google requires this VPN to be running, even during temporary app unlocks and when keyword filtering is off. " +
                     "Turning the VPN off keeps Google locked until you turn it on again."),
@@ -1075,7 +1075,7 @@ class MainActivity : AppCompatActivity() {
         col.addView(label("Chrome whitelist", 22f))
         col.addView(button("Judge a website") { startActivity(JudgeActivity.openIntent(this)) })
         col.addView(label(info))
-        col.addView(label("Path checks stay active when a site changes pages without reloading. Keep Install Lock's accessibility service connected."))
+        col.addView(label("Path checks stay active when a site changes pages without reloading. Keep Gouge's accessibility service connected."))
         col.addView(button("Extra locked sites") { goTo { showExtraLockedSites() } })
         col.addView(button("Pending tasks") { goTo { showScheduledTasks() } })
         col.addView(button("Temporary links (1 day)") { goTo { showTemporaryLinks() } })
@@ -1312,7 +1312,7 @@ class MainActivity : AppCompatActivity() {
             label(if (enabled) "Enabled · ${allowed.size} allowed communities" else "Not enabled"),
             label("Only verified allowed communities can be viewed in protected Reddit apps. Mixed feeds, profiles, search, " +
                 "and screens whose community cannot be verified are covered. Use the community buttons below to open Reddit directly."),
-            label("Rules are saved in Install Lock and survive uninstalling, clearing data, or reinstalling a Reddit client. " +
+            label("Rules are saved in Gouge and survive uninstalling, clearing data, or reinstalling a Reddit client. " +
                 "Sign in before enabling protection; login screens are also restricted."),
             label("Approved communities also become Chrome whitelist paths when their approval wait finishes. " +
                 "Removing a community removes its linked Chrome permission. Existing website blocks and app locks still apply."),
@@ -1410,7 +1410,7 @@ class MainActivity : AppCompatActivity() {
         val msg = errorLabel()
         val views = mutableListOf<View>(label("Set up Reddit task passwords", 22f),
             label("Set these first passwords before enabling Reddit protection. Existing task passwords cannot be replaced here. " +
-                "Passwords are saved securely in Install Lock automatically. Adding communities or relaxing protection uses the task confirmation delay."),
+                "Passwords are saved securely in Gouge automatically. Adding communities or relaxing protection uses the task confirmation delay."),
             button("Generate separate passwords") { fields.forEach { (scope, pair) ->
                 val value = TaskVault.generatePassword(scope); pair.first.setText(value); pair.second.setText(value)
             } })
@@ -1931,7 +1931,7 @@ class MainActivity : AppCompatActivity() {
         val upgradePassword = passwordField("Current task password (one-time upgrade)")
         var choices = emptyList<com.example.delayedsecrect.InlineSecretChoice>()
         var recoverSubredditPassword = false
-        val upgrade = button("Save current password in Install Lock") {
+        val upgrade = button("Save current password in Gouge") {
             val value = upgradePassword.text.toString()
             taskJob(msg, {
                 if (ScheduledTasks.attachExisting(this, scope, value)) null
@@ -1956,7 +1956,7 @@ class MainActivity : AppCompatActivity() {
         upgradePassword.visibility = View.GONE
         upgrade.visibility = View.GONE
         screen(label(task.title, 22f),
-            label("Confirm once to start this task's delay. The exact change applies automatically when the wait ends, even after leaving this screen. Passwords are managed securely inside Install Lock."),
+            label("Confirm once to start this task's delay. The exact change applies automatically when the wait ends, even after leaving this screen. Passwords are managed securely inside Gouge."),
             explanation, upgradePassword, upgrade, msg, confirm,
             button("Task passwords") { goTo { showTaskPasswords() } },
             button("Cancel") { back() })
@@ -1970,7 +1970,7 @@ class MainActivity : AppCompatActivity() {
             explanation.text = choices.singleOrNull()?.let {
                 "Applies ${it.delayMinutes} minutes after confirmation. No password copying or separate vault is needed."
             } ?: if (recoverSubredditPassword) "You do not need the old password. Confirm to start a one-time recovery wait of at least ${maxOf(15, NativeTaskPasswords.delay(this, scope))} minutes. " +
-                "When it ends, Install Lock saves a new password automatically and allows only this requested subreddit in Reddit and Chrome. There is no second wait. Existing rules stay active during recovery."
+                "When it ends, Gouge saves a new password automatically and allows only this requested subreddit in Reddit and Chrome. There is no second wait. Existing rules stay active during recovery."
             else "Enter this task's current password once to store it natively. Existing passwords and protections stay in effect."
         }
     }
@@ -2206,7 +2206,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAbout() {
-        screen(label("About Install Lock", 22f),
+        screen(label("About Gouge", 22f),
             label("Device protection, app locks and website rules in one place."),
             label("Visual design inspired by Curbox: Material 3 surfaces, rounded cards and Inter typography."),
             section("Website category data", "UT1 manga/comics catalog · CC BY-SA 4.0",
@@ -2255,7 +2255,7 @@ class MainActivity : AppCompatActivity() {
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding(dp(8), 0, dp(20), 0)
                 addView(UiStyle.backButton(this@MainActivity) { back() }, LinearLayout.LayoutParams(dp(48), dp(48)))
-                addView(UiStyle.label(this@MainActivity, "Install Lock", 14f))
+                addView(UiStyle.label(this@MainActivity, "Gouge", 14f))
             }
             frame.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
         }

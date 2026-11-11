@@ -32,7 +32,7 @@ class DelayedUnlockActivity : AppCompatActivity() {
             addView(message)
         }
         layout.addView(MaterialButton(this).apply {
-            text = "Return to Install Lock"
+            text = "Return to Gouge"
             setOnClickListener {
                 startActivity(Intent(this@DelayedUnlockActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
                 finish()
@@ -46,14 +46,14 @@ class DelayedUnlockActivity : AppCompatActivity() {
         }
         setContentView(scroll)
         if (savedInstanceState != null || incoming.action != DelayedSecrets.RESULT || password.isBlank()) {
-            message.text = "This request is no longer available. Request the password again from Install Lock."
+            message.text = "This request is no longer available. Request the password again from Gouge."
             return
         }
         val task = DelayedSecrets.take(this, id)
         fun valid() = SecretDeliveryWindow.valid(expires, boot, SystemClock.elapsedRealtime(),
             Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -2))
         if (task == null || !valid()) {
-            message.text = "This unlock request expired or was already used. Request it again from Install Lock."
+            message.text = "This unlock request expired or was already used. Request it again from Gouge."
             return
         }
         executor.execute {
@@ -67,7 +67,7 @@ class DelayedUnlockActivity : AppCompatActivity() {
                     finish()
                 } else {
                     message.text = if (success) "Completed: ${task.title}\nOnly the requested task was authorized."
-                        else "Could not complete: ${task.title}\nCheck that Install Lock is still device owner, the secret matches this task, the task is not locked out, and the requested change is still valid."
+                        else "Could not complete: ${task.title}\nCheck that Gouge is still device owner, the secret matches this task, the task is not locked out, and the requested change is still valid."
                 }
             }
         }

@@ -77,8 +77,8 @@ internal object JudgeStore {
         val policy = snapshot(c)
         if (judgement.policyRevision != policy.revision) return "Your website rules changed while Judge was checking. Judge this page again with your current rules."
         if (!Policy.isOwner(c)) return "Device-owner setup is required."
-        if (!BrowserKeywordService.isEnabled(c)) return "Enable Install Lock's browser accessibility service before granting immediate access."
-        if (!BrowserKeywordService.isReady(c)) return "Browser monitoring is not ready. Finish banking mode if active, then reconnect Install Lock's browser accessibility service."
+        if (!BrowserKeywordService.isEnabled(c)) return "Enable Gouge's browser accessibility service before granting immediate access."
+        if (!BrowserKeywordService.isReady(c)) return "Browser monitoring is not ready. Finish banking mode if active, then reconnect Gouge's browser accessibility service."
         judgement.hosts.forEach { policy.veto("https://$it/")?.let { reason -> return reason } }
         val allowed = JudgeRules.activeHosts(judgement.hosts, policy.extraLocks, policy.domainRules, policy.eligibleHosts)
         if (allowed != judgement.hosts) return "An extra site lock, ordered Block rule, or the reviewed-domain policy prevents this grant."

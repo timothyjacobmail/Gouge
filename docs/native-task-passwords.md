@@ -1,6 +1,6 @@
 # Native task passwords
 
-Install Lock saves an encrypted copy of each task password together with its salted authentication hash when setting up, enrolling, or changing a task password. AES-GCM uses an Android Keystore key, with the exact task scope as associated data. Failure to encrypt prevents the credential transaction from committing. Plaintext passwords are never placed in preferences or scheduled-task records.
+Gouge saves an encrypted copy of each task password together with its salted authentication hash when setting up, enrolling, or changing a task password. AES-GCM uses an Android Keystore key, with the exact task scope as associated data. Failure to encrypt prevents the credential transaction from committing. Plaintext passwords are never placed in preferences or scheduled-task records.
 
 Task confirmation uses the native credential directly. Confirming starts a persisted countdown for the exact operation; completing it rechecks the credential and task scope. Changing a password invalidates previously confirmed tasks, even when the replacement happens to have the same plaintext value. Cancellation and reboot behavior remain unchanged. **Settings → Task confirmation delay** defaults to 15 minutes. Changing it uses the existing timing task and its current wait. Confirmed countdowns retain their original duration.
 

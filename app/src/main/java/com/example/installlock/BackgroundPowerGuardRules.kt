@@ -5,7 +5,7 @@ import java.util.Locale
 internal data class PowerSettingNode(val id: String, val text: String)
 internal data class PowerSettingScreen(val packageName: String, val nodes: List<PowerSettingNode>)
 
-/** The app heading must identify Install Lock; a list row mentioning it is insufficient. */
+/** The app heading must identify Gouge; a list row mentioning it is insufficient. */
 internal object BackgroundPowerGuardRules {
     val settingsPackages = setOf("com.iqoo.powersaving", "com.vivo.abe", "com.android.settings")
     private fun normalized(text: String) = text.trim().replace('’', '\'')

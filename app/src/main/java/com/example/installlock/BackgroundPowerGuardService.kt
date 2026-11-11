@@ -69,7 +69,7 @@ class BackgroundPowerGuardService : AccessibilityService() {
                 return
             }
             showShield()
-            Log.i("InstallLockPowerGuard", "Blocked Install Lock background-power editor")
+            Log.i("InstallLockPowerGuard", "Blocked Gouge background-power editor")
             // Restore Allow if a tap raced window delivery, then leave the protected editor.
             root.findAccessibilityNodeInfosByViewId("com.iqoo.powersaving:id/all_opt")
                 .firstOrNull()?.takeIf { !it.isChecked }?.let {
@@ -79,7 +79,7 @@ class BackgroundPowerGuardService : AccessibilityService() {
             performGlobalAction(GLOBAL_ACTION_BACK)
             val now = SystemClock.elapsedRealtime()
             if (now - lastNotice > 2000) {
-                Toast.makeText(this, "Install Lock's background power usage is locked to Allow.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Gouge's background power usage is locked to Allow.", Toast.LENGTH_SHORT).show()
                 lastNotice = now
             }
             handler.postDelayed(check, 100)
@@ -92,7 +92,7 @@ class BackgroundPowerGuardService : AccessibilityService() {
     private fun showShield() {
         if (shield != null) return
         val view = TextView(this).apply {
-            text = "Install Lock background protection is locked."
+            text = "Gouge background protection is locked."
             textSize = 20f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(23, 29, 27))

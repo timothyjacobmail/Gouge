@@ -121,7 +121,7 @@ internal class InstallLockRequests(private val c: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(c, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-            .setContentTitle("Install Lock password ready")
+            .setContentTitle("Gouge password ready")
             .setContentText("${request.title}. Tap to confirm unlock.")
             .setStyle(NotificationCompat.BigTextStyle().bigText("${request.title}\nTap to confirm unlock before this request expires."))
             .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(expiresIn.coerceAtLeast(1))

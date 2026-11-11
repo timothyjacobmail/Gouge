@@ -61,7 +61,7 @@ class DnsFilterService : VpnService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, "google_vpn")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setContentTitle("Install Lock Google VPN")
+            .setContentTitle("Gouge Google VPN")
             .setContentText("Required for Google access. Keyword protection also applies.")
             .setContentIntent(open)
             .setOngoing(true)
@@ -121,7 +121,7 @@ class DnsFilterService : VpnService() {
     private fun startFilter(): Boolean {
         return try {
             val fd = Builder()
-                .setSession("Install Lock DNS filter")
+                .setSession("Gouge DNS filter")
                 .setMtu(1500)
                 .addAddress(CLIENT_ADDR, 32)
                 .addDnsServer(DNS_ADDR)

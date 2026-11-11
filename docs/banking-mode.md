@@ -2,7 +2,7 @@
 
 Accessibility is controlled manually from **Banking mode**. Tap **Turn accessibility off for banking** before using your bank, then **Turn accessibility back on** when finished. Opening, leaving or closing an app never switches accessibility. The app no longer requests Usage Access or polls foreground usage events. Existing paused sessions stay paused until manually finished, including after an upgrade or reboot.
 
-The off button first verifies Android has locked the monitored browsers and feeds, then switches off Install Lock's two accessibility services. The background-power guard respects this manual pause. Normal app locks, focus lock, curfew, installation waits and the banking-list wait continue. The notification returns to the manual controls.
+The off button first verifies Android has locked the monitored browsers and feeds, then switches off Gouge's two accessibility services. The background-power guard respects this manual pause. Normal app locks, focus lock, curfew, installation waits and the banking-list wait continue. The notification returns to the manual controls.
 
 ## Banking/Finance list and the 15-minute wait
 
@@ -22,7 +22,7 @@ Banking discovery can use a package's public Play listing regardless of installe
 
 ## Manual service restoration
 
-The existing administrator-granted WRITE_SECURE_SETTINGS permission allows manual controls to remove and restore only Install Lock's enabled-service entries. Other apps' accessibility services and changes made during banking are preserved. Without this permission, the off button uses each connected service's disableSelf API; after finishing banking, enable the desired Install Lock services manually in Android Accessibility settings.
+The existing administrator-granted WRITE_SECURE_SETTINGS permission allows manual controls to remove and restore only Gouge's enabled-service entries. Other apps' accessibility services and changes made during banking are preserved. Without this permission, the off button uses each connected service's disableSelf API; after finishing banking, enable the desired Gouge services manually in Android Accessibility settings.
 
 The administrator setup command, if needed, is:
 

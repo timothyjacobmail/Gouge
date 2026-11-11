@@ -53,12 +53,12 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         fun openForSecret(context: Context, secretId: String): String = open(context, secretIntent(context, secretId))
 
         private fun open(context: Context, intent: Intent): String {
-            if (!PasswordFieldEntry.available) return "Turn on Install Lock accessibility, then try Floating password again."
+            if (!PasswordFieldEntry.available) return "Turn on Gouge accessibility, then try Floating password again."
             if (!hasOverlayPermission(context)) {
                 try { requestOverlayPermission(context) } catch (_: RuntimeException) {
-                    return "Open Android settings and allow Install Lock to display over other apps, then try again."
+                    return "Open Android settings and allow Gouge to display over other apps, then try again."
                 }
-                return "Allow Install Lock to display over other apps, then tap Floating password again."
+                return "Allow Gouge to display over other apps, then tap Floating password again."
             }
             return try {
                 context.startForegroundService(intent)
@@ -85,7 +85,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             return START_NOT_STICKY
         }
 
-        // IDs 1 and 2 belong to Install Lock's policy and VPN foreground services.
+        // IDs 1 and 2 belong to Gouge's policy and VPN foreground services.
         startForeground(7001, buildForegroundNotification())
 
         try {
@@ -94,7 +94,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 else secretSession(intent?.getStringExtra(EXTRA_SECRET_ID).orEmpty(),
                     intent?.getBooleanExtra(EXTRA_ENTRY_ONLY, true) != false)
             if (session == null || !hasOverlayPermission(this)) {
-                Toast.makeText(this, "Password unavailable or expired. Request it again in Install Lock.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Password unavailable or expired. Request it again in Gouge.", Toast.LENGTH_LONG).show()
                 removeOverlay()
                 stopSelf()
             } else showOverlay(session)

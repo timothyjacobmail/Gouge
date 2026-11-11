@@ -46,7 +46,7 @@ class TemporaryLinkActivity : AppCompatActivity() {
                     val problem = when {
                         !Policy.isOwner(this@TemporaryLinkActivity) -> "Device-owner setup is required."
                         !Store.chromeLock(this@TemporaryLinkActivity) -> "Turn on the Chrome whitelist before opening temporary links."
-                        !BrowserKeywordService.isReady(this@TemporaryLinkActivity) -> "Connect Install Lock's browser accessibility service to open this link."
+                        !BrowserKeywordService.isReady(this@TemporaryLinkActivity) -> "Connect Gouge's browser accessibility service to open this link."
                         else -> null
                     }
                     if (problem != null) { message.text = problem; return@button }

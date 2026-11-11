@@ -81,7 +81,7 @@ class GoogleSearchRecoveryActivity : AppCompatActivity() {
                 query.setSelection(text.length)
             }
             if (!DnsFilterService.isReady(this)) {
-                message.text = "Google requires Install Lock's VPN. Turn on Google VPN filter in Install Lock, then retry your search."
+                message.text = "Google requires Gouge's VPN. Turn on Google VPN filter in Gouge, then retry your search."
                 return
             }
             val words = if (Store.browserKeywordFilterEnabled(this)) Store.browserKeywords(this) else emptySet()
@@ -98,7 +98,7 @@ class GoogleSearchRecoveryActivity : AppCompatActivity() {
             } catch (_: ActivityNotFoundException) {
                 message.text = "The Google app could not open a new search. Check that it is installed and enabled."
             } catch (_: SecurityException) {
-                message.text = "Android did not allow Google to open. Check Why apps are locked in Install Lock."
+                message.text = "Android did not allow Google to open. Check Why apps are locked in Gouge."
             }
         }
         query.setOnEditorActionListener { _, action, _ ->

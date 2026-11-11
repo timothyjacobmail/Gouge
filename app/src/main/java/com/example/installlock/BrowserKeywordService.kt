@@ -491,7 +491,7 @@ class BrowserKeywordService : AccessibilityService() {
             }
         } catch (_: RuntimeException) {
             performGlobalAction(GLOBAL_ACTION_HOME)
-            Toast.makeText(this, "Site blocked. Open Chrome's whitelist in Install Lock to add a site.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Site blocked. Open Chrome's whitelist in Gouge to add a site.", Toast.LENGTH_LONG).show()
         } finally {
             root?.recycle()
             handlingMatch = false
@@ -507,10 +507,10 @@ class BrowserKeywordService : AccessibilityService() {
                 startActivity(GoogleSearchRecoveryActivity.openIntent(this, word, query))
             }
         } catch (_: RuntimeException) {
-            // The same search editor is also available from Install Lock if Android
+            // The same search editor is also available from Gouge if Android
             // prevents an automatic launch. Never leave the blocked results readable.
             performGlobalAction(GLOBAL_ACTION_HOME)
-            Toast.makeText(this, "Keyword blocked. Open Install Lock to start a new Google search.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Keyword blocked. Open Gouge to start a new Google search.", Toast.LENGTH_LONG).show()
         } finally {
             root?.recycle()
             handlingMatch = false

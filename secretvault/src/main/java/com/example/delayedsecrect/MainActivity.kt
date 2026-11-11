@@ -164,7 +164,7 @@ fun SecretListScreen(
             if (secrets.isEmpty()) {
                 Card(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text("Add a secret with +, or import your existing secret-list file. " +
-                        "This vault is stored inside Install Lock; the separate Delayed Secret app keeps its own data.",
+                        "This vault is stored inside Gouge; the separate Delayed Secret app keeps its own data.",
                         Modifier.padding(16.dp))
                 }
             }
@@ -284,9 +284,9 @@ fun SecretListScreen(
                             }
                             RevealState.REVEALED -> {
                                 if (linkedRequest != null) {
-                                    Text("Ready for Install Lock. Confirmation expires automatically.")
+                                    Text("Ready for Gouge. Confirmation expires automatically.")
                                     Button(onClick = { context.startActivity(linkedRequests.openIntent(context, linkedRequest.id)) }) {
-                                        Text("Unlock in Install Lock?")
+                                        Text("Unlock in Gouge?")
                                     }
                                     OutlinedButton(onClick = {
                                         android.widget.Toast.makeText(context, OverlayService.openForRequest(context, linkedRequest.id), android.widget.Toast.LENGTH_LONG).show()

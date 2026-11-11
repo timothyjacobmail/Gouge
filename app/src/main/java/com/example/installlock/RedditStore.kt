@@ -7,7 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.SystemClock
 
-/** Rules and remembered client identities belong to Install Lock, not to the Reddit installation. */
+/** Rules and remembered client identities belong to Gouge, not to the Reddit installation. */
 internal object RedditStore {
     const val ENABLED = "redditEnabled"
     const val ALLOWED = "redditAllowed"

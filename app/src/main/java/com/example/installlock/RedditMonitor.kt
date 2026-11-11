@@ -184,7 +184,7 @@ internal class RedditMonitor(private val service: AccessibilityService, private 
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
             } catch (error: RuntimeException) {
                 android.util.Log.w("InstallLockReddit", "Could not open subreddit settings", error)
-                Toast.makeText(service, "Could not open settings. Open Install Lock and choose Reddit subreddit allowlist.", Toast.LENGTH_LONG).show()
+                Toast.makeText(service, "Could not open settings. Open Gouge and choose Reddit subreddit allowlist.", Toast.LENGTH_LONG).show()
             }
         }
         button("Leave Reddit") { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }

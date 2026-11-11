@@ -30,7 +30,7 @@ internal object BackgroundPowerProtection {
     fun summary(c: Context) = when {
         BankingMode.active(c) -> "Banking mode: accessibility and the background-power settings guard are paused."
         canMaintainGuard(c) && BackgroundPowerGuardService.connected ->
-            "Install Lock's background-power setting is locked. Other apps' power settings remain available."
+            "Gouge's background-power setting is locked. Other apps' power settings remain available."
         else -> "Background-power setting lock needs administrator setup."
     }
 }

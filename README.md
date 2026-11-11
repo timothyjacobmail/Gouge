@@ -1,10 +1,12 @@
-# Install Lock
+# Gouge
 
-Install Lock is an Android self-control app that uses **device-owner management** to delay new apps, lock distracting apps, and restrict browsing. It also includes task-specific delayed approvals, a personal secret vault, and a GitHub updater.
+Formerly Install Lock. The Android package ID and GitHub repository remain unchanged for compatible updates.
+
+Gouge is an Android self-control app that uses **device-owner management** to delay new apps, lock distracting apps, and restrict browsing. It also includes task-specific delayed approvals, a personal secret vault, and a GitHub updater.
 
 **Start here:** [install the app](#installation), complete [first-run setup](#first-run-setup), then use the dashboard search to find any feature described below.
 
-> **Before enrolling your phone:** this app can suspend apps, prevent uninstall/force-stop, and uninstall apps matching the never-install list. The shipped default never-install rules include **`grok` and `webtoon`**. Matches can be removed automatically, including their data. A focus session cannot be cancelled early. Back up important data and understand these controls before making Install Lock device owner.
+> **Before enrolling your phone:** this app can suspend apps, prevent uninstall/force-stop, and uninstall apps matching the never-install list. The shipped default never-install rules include **`grok` and `webtoon`**. Matches can be removed automatically, including their data. A focus session cannot be cancelled early. Back up important data and understand these controls before making Gouge device owner.
 
 ## Installation
 
@@ -29,7 +31,7 @@ This is the simplest development setup for an existing phone, when Android allow
    .\adb shell dpm set-device-owner com.example.installlock/.AdminReceiver
    ```
 
-5. After successful enrollment, add your accounts back and open Install Lock. Complete the first-run checklist below.
+5. After successful enrollment, add your accounts back and open Gouge. Complete the first-run checklist below.
 
 Google documents this [no-reset development setup](https://developer.android.com/work/dpc/dedicated-devices/cookbook#development-setup). Existing device management, additional users/work profiles, or manufacturer restrictions may prevent enrollment. If it fails, use the exact error to diagnose the cause; APK installation alone does not grant device-owner powers. On macOS/Linux, use `./adb` instead of `.\adb`.
 
@@ -39,29 +41,29 @@ Google documents this [no-reset development setup](https://developer.android.com
 
 The QR installs version 1.7.1 as device owner. It is for initial Android setup, not for enrolling a phone after completing setup.
 
-[![Install Lock setup QR](docs/installation/install-lock-setup-qr.png)](docs/installation/install-lock-setup-qr.png)
+[![Gouge setup QR](docs/installation/install-lock-setup-qr.png)](docs/installation/install-lock-setup-qr.png)
 
 1. Display the QR on another screen; click it to open it at full size.
 2. Back up and factory-reset the receiving phone, or start with a new phone.
 3. At the first welcome screen, tap the same blank spot **six times**, before continuing setup or adding accounts.
 4. Follow the Wi-Fi prompts, scan the QR, and accept device management.
-5. Finish Android setup, then open Install Lock and enable the permissions below.
+5. Finish Android setup, then open Gouge and enable the permissions below.
 
 QR availability depends on the manufacturer's setup wizard. The APK URL and checksum match this exact release; older release QR codes remain valid for their original APKs. Complete factory-reset enrollment has not yet been verified on a physical phone.
 
 ### Play Protect, wireless debugging, and remote help
 
-A sensitive-permissions warning can apply to internet-downloaded apps declaring accessibility services. Install Lock uses accessibility for browser and feed monitoring. ADB is the supported development installation route used on the test phone, but acceptance on every device is not guaranteed. Changing signing keys or choosing a release build alone does not remove a permission-based block. See [Google's explanation and developer appeal guidance](https://developers.google.com/android/play-protect/warning-dev-guidance).
+A sensitive-permissions warning can apply to internet-downloaded apps declaring accessibility services. Gouge uses accessibility for browser and feed monitoring. ADB is the supported development installation route used on the test phone, but acceptance on every device is not guaranteed. Changing signing keys or choosing a release build alone does not remove a permission-based block. See [Google's explanation and developer appeal guidance](https://developers.google.com/android/play-protect/warning-dev-guidance).
 
 Android 11+ supports [wireless ADB pairing](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi), normally with the phone and computer on the same local network. It does not remove enrollment/account requirements. For long-distance help, remotely control a consenting recipient's computer while their phone connects to it by USB or local Wi-Fi. Do not expose ADB directly to the public internet.
 
 ## First-run setup
 
 1. **Check device-owner enrollment.** If the app shows “Not set up as device owner yet,” finish enrollment before configuring features.
-2. **Set up task passwords.** Follow the setup screens, then open **Settings & passwords → Task passwords**. Different operations have separate credentials; protected apps have their own access, removal, and limit credentials. Generated credentials are saved encrypted inside Install Lock. The personal secret vault is optional.
-3. **Enable browser accessibility.** In Android accessibility settings, enable **Install Lock browser and Google keyword filter**. It supports native Chrome URL checks, visible-page filtering, Reddit protection, feed monitoring, and Judge enforcement. Keep it connected when using monitored apps.
+2. **Set up task passwords.** Follow the setup screens, then open **Settings & passwords → Task passwords**. Different operations have separate credentials; protected apps have their own access, removal, and limit credentials. Generated credentials are saved encrypted inside Gouge. The personal secret vault is optional.
+3. **Enable browser accessibility.** In Android accessibility settings, enable **Gouge browser and Google keyword filter**. It supports native Chrome URL checks, visible-page filtering, Reddit protection, feed monitoring, and Judge enforcement. Keep it connected when using monitored apps.
 4. **Configure the Google VPN if you use the Google app.** Open **Browser & Google → Google VPN filter → Turn on** and accept Android's VPN prompt. Google stays locked when its required filter is unavailable.
-5. **Allow notifications, exact alarms, and background operation** when prompted. Disable battery optimization for Install Lock and enable the manufacturer's equivalent of **Allow background power usage**. Exact alarms support scheduled tasks and secret timers.
+5. **Allow notifications, exact alarms, and background operation** when prompted. Disable battery optimization for Gouge and enable the manufacturer's equivalent of **Allow background power usage**. Exact alarms support scheduled tasks and secret timers.
 6. **Review your rules.** Check **Never-install list**, **App locks**, Chrome approvals, and timing settings before enabling more restrictions. Add only the access you intend to permit.
 
 For automatic maintenance of the separate background-power settings guard and manual accessibility restoration after banking, grant this optional administrator permission once through ADB:
@@ -70,7 +72,7 @@ For automatic maintenance of the separate background-power settings guard and ma
 .\adb shell pm grant com.example.installlock android.permission.WRITE_SECURE_SETTINGS
 ```
 
-The guard protects Install Lock's own background-power settings, not every app's settings. Without this grant, accessibility services may need manual restoration. Floating secret windows separately require Android's **Display over other apps** permission.
+The guard protects Gouge's own background-power settings, not every app's settings. Without this grant, accessibility services may need manual restoration. Floating secret windows separately require Android's **Display over other apps** permission.
 
 ## How approvals and locks work
 
@@ -128,7 +130,7 @@ Rules match installed non-system app names or package identities. Matches are su
 
 ### Prevent uninstall and force-stop
 
-Tick apps under **Apps → Prevent uninstall & force stop** to protect them from uninstall, force-stop, and data clearing through supported Android controls. Install Lock always protects itself. Removing another app from this list uses its saved task delay. Device-owner management is intentionally harder to remove than an ordinary installed app.
+Tick apps under **Apps → Prevent uninstall & force stop** to protect them from uninstall, force-stop, and data clearing through supported Android controls. Gouge always protects itself. Removing another app from this list uses its saved task delay. Device-owner management is intentionally harder to remove than an ordinary installed app.
 
 ## Time and distraction controls
 
@@ -160,7 +162,7 @@ Use **Check category** to inspect a domain, or **Add website to manga/comics cat
 
 Open **Browser & Google → Chrome whitelist**. Turn the whitelist on to restrict Chrome to active approvals. Other detected browsers are suspended while this mode is active. With no active approvals, Chrome can block all ordinary websites.
 
-Choose **Add site**, or share a URL to Install Lock from Chrome or the Android share sheet. The shared-site screen offers **Judge for immediate access** for the currently selected or edited HTTPS address, alongside the ordinary delayed approval. Judge's reviewed-domain and content rules still apply; rejected or unverified sites keep the normal delay. You can request a whole domain or a narrower path for the delayed whitelist. Domain entries also cover subdomains; path entries cover matching path prefixes. Confirm the request and wait for its single approval countdown. Active entries show a check mark. Removing a manual approval is immediate; turning the whitelist off is a delayed task.
+Choose **Add site**, or share a URL to Gouge from Chrome or the Android share sheet. The shared-site screen offers **Judge for immediate access** for the currently selected or edited HTTPS address, alongside the ordinary delayed approval. Judge's reviewed-domain and content rules still apply; rejected or unverified sites keep the normal delay. You can request a whole domain or a narrower path for the delayed whitelist. Domain entries also cover subdomains; path entries cover matching path prefixes. Confirm the request and wait for its single approval countdown. Active entries show a check mark. Removing a manual approval is immediate; turning the whitelist off is a delayed task.
 
 The blocked-page screen also provides **Whitelist this site**, so Chrome's Share menu is not required. Linked Reddit community paths and first-matching domain Allow rules can independently permit access. Approved pages can use narrowly scoped embedded reCAPTCHA resources without approving all Google pages. See [Chrome whitelist details](docs/chrome-whitelist.md).
 
@@ -198,7 +200,7 @@ Open **Reddit subreddit allowlist**, set up any missing Reddit task credentials,
 
 The monitor requires verifiable native community identity. Home, Popular, All, search, profiles, mixed feeds, login, and unidentified screens are covered when they cannot establish an approved community. Use **Open r/name** to navigate directly to an approved community. Official Reddit is supported; detected modified clients are remembered, and **Register a custom Reddit client** can enroll another client. Unknown layouts remain restricted; arbitrary modified clients cannot be guaranteed compatible.
 
-Approved communities generate linked Chrome path permissions with no second wait. Removing a community removes its linked permission; independently saved website/domain approvals can still apply. Client reinstall or data clearing does not erase rules stored by Install Lock. Other app locks remain in effect, and missing accessibility suspends monitored clients.
+Approved communities generate linked Chrome path permissions with no second wait. Removing a community removes its linked permission; independently saved website/domain approvals can still apply. Client reinstall or data clearing does not erase rules stored by Gouge. Other app locks remain in effect, and missing accessibility suspends monitored clients.
 
 ### Judge
 
@@ -232,7 +234,7 @@ Banking mode does not bypass installation waits, app locks, focus, curfew, or ot
 
 - **Block screenshots:** blocks screenshots and screen recording through device-owner policy across apps. Allowing capture again is a delayed task.
 - **Curbox guard:** if you separately use Curbox, enable its accessibility service first, then turn on this guard. It makes access to YouTube and Instagram depend on Curbox being available, with a default 15-second grace period after it stops. Turning the guard off is delayed. Curbox is a separate app, not included in this APK.
-- **Background-power settings guard:** a separate accessibility service protects Install Lock's supported background-power controls. Manufacturer-specific coverage is limited, particularly outside the tested Vivo settings. Keep the actual battery exemption enabled as well; the guard is not an immutable system policy.
+- **Background-power settings guard:** a separate accessibility service protects Gouge's supported background-power controls. Manufacturer-specific coverage is limited, particularly outside the tested Vivo settings. Keep the actual battery exemption enabled as well; the guard is not an immutable system policy.
 - **Recovery:** boot/package-replacement handling and scheduled recovery try to restart enforcement without opening the dashboard. They do not cancel waits or grant app access. Reboots are not a general unlock mechanism, but different timers have different recovery behavior: pending task waits restart, while focus/curfew/active cooldown restrictions remain in effect.
 
 ## Personal secret vault: Delayed Secrets
@@ -243,7 +245,7 @@ For **Import**, use a plain-text file containing one `name<TAB>secret` entry per
 
 The vault supports per-secret reveal delays, protected delay changes, copying, and floating password windows. Floating windows require overlay permission; direct entry into a focused password field also needs the app's accessibility integration. Clipboard cleanup and the reveal window limit availability, but copying or displaying a secret still exposes it to the receiving app or viewer.
 
-This vault is separate from the app's encrypted native task credentials. You do not need to create a personal secret for every normal Install Lock task. Vault settings control its own default reveal delay and visibility window; reductions to delays and relevant visibility changes can have their own 30-minute pending-setting wait.
+This vault is separate from the app's encrypted native task credentials. You do not need to create a personal secret for every normal Gouge task. Vault settings control its own default reveal delay and visibility window; reductions to delays and relevant visibility changes can have their own 30-minute pending-setting wait.
 
 ## Settings, passwords, and app updates
 

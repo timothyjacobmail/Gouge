@@ -338,7 +338,7 @@ object Policy {
             dpm(c).setAlwaysOnVpnPackage(admin(c), c.packageName, false)
             c.startForegroundService(Intent(c, DnsFilterService::class.java))
             sweep(c)
-            "Starting Install Lock's VPN. Google remains locked until it is running; other protections still apply."
+            "Starting Gouge's VPN. Google remains locked until it is running; other protections still apply."
         } catch (e: Exception) {
             "Error: ${e.message}"
         }
@@ -352,7 +352,7 @@ object Policy {
             c.stopService(Intent(c, DnsFilterService::class.java))
             DnsFilterService.disconnect()
             sweep(c)
-            "VPN is off. Google is locked until Install Lock's VPN is running again."
+            "VPN is off. Google is locked until Gouge's VPN is running again."
         } catch (e: Exception) {
             "Error: ${e.message}"
         }
@@ -393,7 +393,7 @@ object Policy {
             .any { it.resolveInfo?.serviceInfo?.packageName == CURBOX }
     }
 
-    /** Chosen apps (plus Install Lock itself) can't be uninstalled, force-stopped or have data cleared. */
+    /** Chosen apps (plus Gouge itself) can't be uninstalled, force-stopped or have data cleared. */
     fun enforceNoUninstall(c: Context) {
         if (!isOwner(c)) return
         val dpm = dpm(c)
