@@ -299,3 +299,5 @@ python tools/prepare-update-release.py --tag YOUR_NEW_RELEASE_TAG
 This writes the APK, update manifest, provisioning JSON, QR and hashes under `build/update-release/YOUR_NEW_RELEASE_TAG`. Upload them to that exact new GitHub release tag. Never overwrite an old QR's APK with different bytes. Keep the original private debug keystore for compatible updates; do not commit or upload it. The current Gradle release variant also uses debug signing.
 
 This guide describes the current distributed APK's features. Release notes document build provenance: shipped APKs can include local working-tree features beyond the tagged committed source, so GitHub's automatic source archive may not reproduce every feature in the binary. Current 1.7.1 validation includes 332 passing JVM tests, successful app/instrumentation APK builds, public release checksum checks, and a phone check where EDC received a Judge approval and YouTube was rejected. These checks do not establish universal classification accuracy or complete factory-reset enrollment coverage.
+
+Performance implementation and reproducible component measurements: [Java keyword scanner](docs/performance.md).
