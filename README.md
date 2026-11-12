@@ -136,7 +136,9 @@ Tick apps under **Apps → Prevent uninstall & force stop** to protect them from
 
 ### Focus lock
 
-Open **Focus lock → Start or view focus lock**, select apps, and choose **1–1440 minutes**. Review the selection before confirming.
+Open **Focus lock** on the dashboard, select apps, and choose **1–1440 minutes**. Review the selection before confirming.
+
+Add Gouge widgets through your launcher's home-screen widget picker. **Focus lock** starts immediately with your last session's duration and app selection, without opening a confirmation screen. Before your first session, it uses **30 minutes** and the default distracting/protected apps. Tapping during an active session leaves that session unchanged. **Lock protected apps now** ends temporary access to protected apps. Both widgets follow the app's colours, fonts and card styling.
 
 **Once started, the session cannot be cancelled, shortened, or bypassed with a password.** App installations and updates are blocked too. Restarts and reboots do not cancel it. When it ends, other app restrictions continue.
 

@@ -1,0 +1,46 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/focus_lock_widget"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="12dp"
+    android:background="@drawable/focus_lock_widget_background"
+    android:contentDescription="@string/focus_lock_widget_description">
+    <ImageView
+        android:id="@+id/lock_widget_icon"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:padding="8dp"
+        android:background="@drawable/lock_widget_badge"
+        android:layout_marginEnd="8dp"
+        android:src="@drawable/ic_il_lock"
+        android:tint="@color/il_tertiary"
+        android:importantForAccessibility="no"
+        android:contentDescription="@null" />
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView android:fontFamily="@font/inter"
+            android:id="@+id/lock_widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/focus_lock"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/il_on_surface" />
+        <TextView android:fontFamily="@font/inter"
+            android:id="@+id/lock_widget_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/focus_lock_widget_hint"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/il_on_surface_variant" />
+    </LinearLayout>
+</LinearLayout>

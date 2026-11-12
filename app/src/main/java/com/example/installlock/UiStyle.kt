@@ -99,7 +99,8 @@ internal object UiStyle {
 
     fun badge(context: Context, drawable: Int) = ImageView(context).apply {
         setImageResource(drawable)
-        imageTintList = ColorStateList.valueOf(color(context, MaterialR.attr.colorTertiary))
+        imageTintList = if (drawable == R.drawable.ic_il_play_store) null
+            else ColorStateList.valueOf(color(context, MaterialR.attr.colorTertiary))
         background = shape(context, color(context, MaterialR.attr.colorTertiaryContainer), 14)
         setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -108,12 +109,60 @@ internal object UiStyle {
     fun sectionIcon(title: String): Int = when {
         title.contains("curfew", true) -> R.drawable.ic_il_moon_stars
         title.contains("delayed secrets", true) -> R.drawable.ic_il_secret
+        title.contains("Play Store", true) -> R.drawable.ic_il_play_store
+        title.contains("bank", true) -> R.drawable.ic_il_bank
         title.contains("Browser", true) || title.contains("website", true) || title.contains("domain", true) ||
                 title.contains("keyword", true) || title.contains("Blocked words", true) || title.contains("page", true) -> R.drawable.ic_il_globe
-        title.contains("app", true) || title.contains("categor", true) || title.contains("Play Store", true) -> R.drawable.ic_il_apps
+        title.contains("app", true) || title.contains("categor", true) -> R.drawable.ic_il_apps
         title.contains("setting", true) || title.contains("timing", true) || title.contains("duration", true) -> R.drawable.ic_il_tune
         title.contains("how", true) || title.contains("status", true) || title.contains("when", true) -> R.drawable.ic_il_info
         else -> R.drawable.ic_il_lock
+    }
+
+    /** The shared surface, badge and typography for dropdowns and direct navigation cards. */
+    fun sectionHeader(context: Context, title: String, summary: String, trailing: View) = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        isFocusable = true
+        isClickable = true
+        minimumHeight = dp(context, 88)
+        setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16))
+        contentDescription = "$title. $summary"
+        background = RippleDrawable(ColorStateList.valueOf(color(context, MaterialR.attr.colorSurfaceVariant)),
+            shape(context, color(context, MaterialR.attr.colorSurfaceContainer)), shape(context, Color.WHITE))
+        clipToOutline = true
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name
+            }
+        }
+        addView(badge(context, sectionIcon(title)), LinearLayout.LayoutParams(dp(context, 48), dp(context, 48)))
+        val text = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            addView(label(context, title, 18f).apply {
+                setTextColor(color(context, MaterialR.attr.colorOnSurface))
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(0, 0, 0, dp(context, 3))
+            })
+            if (summary.isNotBlank()) addView(label(context, summary, 13f).apply { setPadding(0, 0, 0, 0) })
+        }
+        addView(text, LinearLayout.LayoutParams(0, -2, 1f).apply {
+            marginStart = dp(context, 16)
+            marginEnd = dp(context, 8)
+        })
+        addView(trailing, LinearLayout.LayoutParams(dp(context, 24), dp(context, 24)))
+    }
+
+    fun actionCard(context: Context, title: String, summary: String, onClick: () -> Unit): View {
+        val arrow = ImageView(context).apply {
+            setImageResource(R.drawable.ic_il_chevron)
+            rotation = -90f
+            imageTintList = ColorStateList.valueOf(color(context, MaterialR.attr.colorOnSurfaceVariant))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        return sectionHeader(context, title, summary, arrow).apply { setOnClickListener { onClick() } }
     }
 
     /** Does not replace controls, input types, listeners or password error colors. */

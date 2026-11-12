@@ -35,6 +35,20 @@
         <activity android:name=".PlayStoreDelayActivity" android:exported="false"
             android:launchMode="singleTop" android:excludeFromRecents="true" />
         <receiver android:name=".ScheduledTaskReceiver" android:exported="false" />
+        <receiver android:name=".FocusLockWidget" android:exported="false"
+            android:label="@string/focus_lock">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/focus_lock_widget" />
+        </receiver>
+        <receiver android:name=".LockProtectedAppsWidget" android:exported="false"
+            android:label="@string/lock_protected_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/lock_protected_apps_widget" />
+        </receiver>
 
         <activity
             android:name=".MainActivity"

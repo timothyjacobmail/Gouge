@@ -490,9 +490,6 @@ class MainActivity : AppCompatActivity() {
         try { startActivity(launch) } catch (_: RuntimeException) { toast("Android could not open this app."); }
     }
 
-    private fun focusActions() = section("Focus lock", "Lock distracting apps for a duration you choose",
-        button("Start or view focus lock") { goTo { showFocusLock() } })
-
     private fun showFocusLock() {
         val locks = Policy.lockStatuses(this)
         val remaining = FocusLockStore.remaining(this)
@@ -524,7 +521,7 @@ class MainActivity : AppCompatActivity() {
             }, 1000)
             return
         }
-        val defaults = FocusLockStore.defaults(this)
+        val defaults = FocusLockStore.quickStartTargets(this)
         val excluded = FocusLockStore.excluded(this)
         val apps = packageManager.getInstalledApplications(0)
             .filter { it.packageName !in excluded &&
@@ -534,7 +531,7 @@ class MainActivity : AppCompatActivity() {
         val minutes = EditText(this).apply {
             hint = "Duration in minutes (1–1440)"
             inputType = InputType.TYPE_CLASS_NUMBER
-            setText("30")
+            setText(FocusLockStore.quickStartMinutes(this@MainActivity).toString())
         }
         val message = label("")
         val checkboxes = apps.map { app ->
@@ -551,6 +548,8 @@ class MainActivity : AppCompatActivity() {
                 "and your protected apps are selected by default when installed."),
             label("Once started, the app list and duration are fixed until time runs out. Passwords cannot bypass this lock. " +
                 "App installations and updates are also blocked. Existing protections still apply after it ends."),
+            label("The home-screen widget starts immediately using your last session's duration and apps. " +
+                "Before your first session, it uses 30 minutes and the default apps."),
             label(if (Policy.isOwner(this)) "Ready to start." else "Device owner setup is required to use focus lock."),
             minutes,
             section("Apps to lock", "Select all distractions you want to include", *checkboxes.toTypedArray()),
@@ -694,19 +693,35 @@ class MainActivity : AppCompatActivity() {
             addView(UiStyle.menuButton(this@MainActivity) { goTo { showMoreProtections() } },
                 LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        val views = arrayOf<View>(UiStyle.eyebrow(this, "YOUR DASHBOARD"), heading,
-            label("Confirm a sensitive change to apply it after its saved password delay."),
-            button("Pending tasks") { goTo { showScheduledTasks() } },
-            button("Why apps are locked") { goTo { showLockReasons() } },
-            button(if (BankingMode.active(this)) "Banking mode - accessibility off" else "Banking mode") { goTo { showBankingMode() } },
-            focusActions(),
+        val views = arrayOf<View>(heading,
+            label("""Matthew 5:29 (NIV)
+If your right eye causes you to stumble, gouge it out and throw it away. It is better for you to lose one part of your body than for your whole body to be thrown into hell."""),
+            section("Status & tasks", "Pending changes, app lock reasons and protection status",
+                button("Pending tasks") { goTo { showScheduledTasks() } },
+                button("Why apps are locked") { goTo { showLockReasons() } },
+                label("Protection status", 18f),
+                label(unlockStatus()), label(chromeLockExplanation(Policy.lockStatuses(this))), label(playAccessSummary()),
+                label(if (BatteryProtection.exempt(this)) "Battery optimization is disabled for Gouge."
+                    else "Battery optimization can interrupt background protection. Disable it for Gouge."),
+                label(BackgroundPowerProtection.summary(this)),
+                button("Disable battery optimization") { BatteryProtection.request(this) }
+                    .apply { visibility = if (BatteryProtection.exempt(this@MainActivity)) View.GONE else View.VISIBLE }),
+            UiStyle.actionCard(this, "Banking mode",
+                if (BankingMode.active(this)) "Gouge accessibility is paused" else "Accessibility controls and banking apps") {
+                goTo { showBankingMode() }
+            },
+            UiStyle.actionCard(this, getString(R.string.focus_lock), "Lock distracting apps for a duration you choose") {
+                goTo { showFocusLock() }
+            },
             section("Apps", "App access, locks and Play Store categories",
-                button("Open Play Store") { startActivity(PlayStoreDelayActivity.openIntent(this)) },
-                button("Play Store opening delay") { goTo { showPlayStoreDelaySettings() } },
-                button("Play Store immediate access") { goTo { showPlayStoreCategories() } },
-                button("Temporarily unlock one app") { goTo { showAppAccess() } },
-                button("App locks") { goTo { showAppPicker() } },
-                button("Lock protected apps now") { Store.lockProtectedApps(this); Policy.sweep(this); reopen() },
+                section("Play Store", "Open the store, opening delay and immediate access",
+                    button("Open Play Store") { startActivity(PlayStoreDelayActivity.openIntent(this)) },
+                    button("Play Store opening delay") { goTo { showPlayStoreDelaySettings() } },
+                    button("Play Store immediate access") { goTo { showPlayStoreCategories() } }),
+                section("App locks & access", "Manage app locks and temporary access",
+                    button("App locks") { goTo { showAppPicker() } },
+                    button("Lock protected apps now") { Store.lockProtectedApps(this); Policy.sweep(this); reopen() },
+                    button("Temporarily unlock one app") { goTo { showAppAccess() } }),
                 button("Never-install list") { goTo { showNeverInstall() } },
                 button("Prevent uninstall & force stop") { goTo { showNoUninstallPicker() } }),
             browserActions(),
@@ -714,14 +729,7 @@ class MainActivity : AppCompatActivity() {
                 button("App updates") { startActivity(Intent(this, UpdateActivity::class.java)) },
                 button("Settings") { openSettings() },
                 button("Task passwords") { goTo { showTaskPasswords() } },
-                button("About & licenses") { goTo { showAbout() } }),
-            section("Protection status", "Other protections continue during temporary app access",
-                label(unlockStatus()), label(chromeLockExplanation(Policy.lockStatuses(this))), label(playAccessSummary()),
-                label(if (BatteryProtection.exempt(this)) "Battery optimization is disabled for Gouge."
-                    else "Battery optimization can interrupt background protection. Disable it for Gouge."),
-                label(BackgroundPowerProtection.summary(this)),
-                button("Disable battery optimization") { BatteryProtection.request(this) }
-                    .apply { visibility = if (BatteryProtection.exempt(this@MainActivity)) View.GONE else View.VISIBLE }))
+                button("About & licenses") { goTo { showAbout() } }))
         screen(*views)
     }
 

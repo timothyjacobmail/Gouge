@@ -28,6 +28,12 @@ internal object FocusLockStore {
     fun defaults(c: Context): Set<String> =
         (Store.protectedApps(c) + WatchdogStore.monitoredPackages(c)) - excluded(c)
 
+    fun quickStartMinutes(c: Context): Int = prefs(c).getInt("quick_start_minutes", 30)
+        .coerceIn(1, FocusLock.MAX_MINUTES)
+
+    fun quickStartTargets(c: Context): Set<String> =
+        if (prefs(c).contains("quick_start_minutes")) targets(c) else defaults(c)
+
     @Synchronized
     fun remaining(c: Context, now: WatchdogClock = WatchdogStore.clock(c)): Long {
         val old = read(c)
@@ -45,6 +51,7 @@ internal object FocusLockStore {
         val next = FocusLock.start(read(c), minutes, WatchdogStore.clock(c)) ?: return false
         Policy.apply(c)
         return editor(c, next).putStringSet("targets", targets)
+            .putInt("quick_start_minutes", minutes)
             .putStringSet("managed", managed(c) + targets).commit()
     }
 }
