@@ -122,3 +122,42 @@ adb shell am start -n com.example.installlock/.MainActivity
 ```
 
 Run only the listed isolated classes on a provisioned personal phone; unrelated historical integration tests can exercise policy APIs. The optional `profileNativeApp` argument also reads metadata and verifies the existing native limit credential for that package, without resetting failures, scheduling a task or printing its value.
+
+## Immediate Google DNS rejection (2026-11-12)
+
+Blocked DNS requests previously shared the eight-worker upstream queue. With all workers waiting on sockets (default timeout: four seconds), a local rejection could wait behind unrelated lookups or be dropped when the 128-slot queue filled. `DnsWorkQueue.java` now executes local denials on the reader path; only allowed lookups use the bounded upstream workers. Compiled ordered domain rules are reused, and queued allowed lookups recheck current rules before forwarding.
+
+An isolated Vivo instrumentation test held eight workers busy, then compared a rejection through the old scheduling pattern with the new path. With a synthetic 250 ms upstream wait, scheduling completion measured **251.059 ms before** and **0.110 ms after**. These are single-run queue timings, not real image-load or end-to-end DNS timings; the gain comes from removing upstream contention, not from a Java-versus-Kotlin benchmark. No C++ or JNI is needed for this waiting-time bottleneck.
+
+Validation: 382 JVM tests passed, including rejection under a full queue and continued off-reader forwarding; `DnsWorkQueueTimingTest` passed on the phone. The APK was installed and the VPN's live-reader status was verified afterward. Run only this isolated timing class:
+
+```powershell
+adb shell am instrument -w -e class com.example.installlock.DnsWorkQueueTimingTest com.example.installlock.test/androidx.test.runner.AndroidJUnitRunner
+adb logcat -d -s DnsQueueTiming:I '*:S'
+```
+
+Instrumentation may stop the VPN process on exit. Reopen Gouge, turn the previously enabled Google VPN back on and verify its status. DNS rejection cannot remove Google-cached images, terminate existing image connections, or distinguish images served through an allowed encrypted search connection.
+
+## Delayed temporary Google Images access
+
+The Google VPN screen now offers a duration-limited image-host exception using the existing DNS-unblock credential and its saved delay. The scheduled task stores the requested duration, validates the current global maximum again at execution, then opens an elapsed-time window and posts an availability notification. It leaves the VPN and permanent blocklist intact. Expiry, manual ending or reboot stops the exception for new DNS requests. Custom DNS entries and ordered Block rules continue, as does the `googlevideo.com` video block. The DNS worker also checks the policy after an upstream reply, so a lookup waiting on the network cannot return an allowed answer after the access window has expired.
+
+Validation: 385 JVM tests passed, covering exact expiry, duration caps, repeated-start rejection, clock changes, reboot and preserved DNS/domain blocks. Both isolated `GoogleImagesAccessTest` phone tests passed, covering credential validation, unchanged blocklist/VPN state, saved confirmation delay, rejection before the deadline and cancellation. These tests use separate preferences and never apply device policy or change the phone's app locks.
+
+## Google VPN startup (2026-11-12)
+
+The enable action used to set Android's always-on VPN package on every tap and synchronously scan app restrictions before the main thread could create the VPN service. Service creation also restarted protection-service reconciliation even when it was already running. Startup now preserves an existing matching always-on setting, returns immediately for a live reader, reconciles VPN state on a background worker, and starts protection recovery after the tunnel is created only when the protection service is absent. The VPN screen receives readiness events instead of waiting solely for its one-second poll. The readiness check still requires a live tunnel/reader and Android's VPN authorization; other app restrictions are unchanged.
+
+On the connected Vivo with its always-on VPN already configured, a process-cold instrumentation run measured **2,636.173 ms** from main-thread dispatch to the enable call returning, and **2,691.341 ms** to reader readiness before the change. The first optimized run measured **10.773 ms** and **90.251 ms**, respectively (about 30 times faster to reader readiness). These are single-run device timings, not guarantees for a first installation, a permission prompt, or Android/OEM contention. Reader readiness is distinct from other app locks clearing and from Google's own content loading.
+
+The startup test also verifies that repeated enable calls retain the same service and reader. A second optimized run measured **14.318 ms** to enable-return and **79.644 ms** to reader readiness. The warm call took **3.989 ms** inside the method; dispatch waited **1,140.176 ms** behind separate cold protection-service recovery work on the main thread. That remaining queue delay means these reader measurements should not be treated as full UI-frame timings. This bottleneck is Android policy/lifecycle sequencing, so adding a C/C++ or Python runtime would not remove the measured wait. The existing Java DNS dispatcher remains in use; no new native component was added. All 385 JVM tests and the phone startup/reader-reuse check passed.
+
+## Play Store countdown detection
+
+Foreground tracking could accept Vivo's `com.vivo.systemuiplugin` overlay as the active app and then ignore application roots indefinitely. Monitor restarts also retained the previous foreground transition. The monitor now ignores that overlay, resets cached identity on restart/lock/inspection failure, and uses active/focused window-change events to recover a missed window-state event. Focused application windows take precedence over merely active ones. Real application state events take the immediate path without querying window trees. Accessibility event delivery uses no 100 ms coalescing delay; content scans retain their existing debounce and foreground polling stays at 250 ms.
+
+The issue is event/state handling, with no evidence of CPU-bound work suitable for C++, Rust or Python. The Kotlin state machine keeps the existing Android service integration. Six added JVM regression tests cover Vivo overlays, missed enter/leave events, restart recovery and stale roots after Home. All 391 JVM tests passed.
+
+Phone verification exposed another case: Play Store remained launchable while the browser monitor was disconnected and its requested suspension was pending. The existing background-power guard now also observes Play Store foreground identity (no content traversal) and redirects to the countdown while browser monitoring is missing. The countdown continues to require reconnection before it will launch Store. Browser disconnect callbacks request an immediate fallback check. This fallback requires the background-power guard to remain connected; banking mode continues to pause the accessibility services.
+
+Installed-device verification passed three consecutive openings with only the background-power guard connected and three with browser monitoring connected. The completed countdown opened Store; leaving and reopening then showed a fresh two-minute countdown. Home stayed visible when leaving the countdown. Both accessibility services were verified bound at the end, and the VPN was running. Version remains 1.9.9/22, with no GitHub push.

@@ -17,6 +17,7 @@ internal data class DelayedTask(val scope: String, val title: String, val detail
         fun strings(key: String): Set<String> = d.getJSONArray(key).let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
         fun run(action: () -> Boolean) = TaskPasswords.run(c, task, password, action)
         return when (task.kind) {
+            TaskKind.BETA_CHANGE -> run { BetaActions.execute(c, d.getString("draft")) }
             TaskKind.APP_UNLOCK -> Store.unlockApp(c, task.app, d.getInt("minutes"), password)
             TaskKind.APP_LIMIT -> TaskPasswords.setLimit(c, task.app, d.getInt("minutes"), password)
             TaskKind.APP_REMOVE -> Store.removeAppLock(c, task.app, password).also { if (it) Policy.release(c, listOf(task.app)) }
@@ -40,7 +41,10 @@ internal data class DelayedTask(val scope: String, val title: String, val detail
                 Policy.allowUninstall(c, remove)
                 true
             }
-            TaskKind.DNS_UNBLOCK -> run { Store.setBlockedDomains(c, Store.blockedDomains(c) - strings("remove")); true }
+            TaskKind.DNS_UNBLOCK -> run {
+                if (d.has("imagesMinutes")) GoogleImagesAccess.start(c, d.getInt("imagesMinutes"))
+                else { Store.setBlockedDomains(c, Store.blockedDomains(c) - strings("remove")); true }
+            }
             TaskKind.DOMAIN_ALLOW -> Store.addDomainRule(c, DomainAction.ALLOW, DomainMatchType.valueOf(d.getString("type")),
                 d.getString("value"), d.getInt("position"), password)
             TaskKind.DOMAIN_MOVE -> Store.moveDomainRule(c, d.getString("id"), d.getInt("position"), password)

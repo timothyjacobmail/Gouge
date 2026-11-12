@@ -20,10 +20,8 @@ import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.Executors
 
 class DnsFilterService : VpnService() {
 
@@ -33,6 +31,11 @@ class DnsFilterService : VpnService() {
         private const val DNS_ADDR = "10.111.222.2"
         private val DNS_BYTES = byteArrayOf(10, 111, 222.toByte(), 2)
         @Volatile private var activeService: DnsFilterService? = null
+        private val stateListeners = CopyOnWriteArraySet<() -> Unit>()
+        private val policyWorker = Executors.newSingleThreadExecutor { task -> Thread(task, "Gouge-VPN-policy") }
+
+        internal fun addStateListener(listener: () -> Unit) { stateListeners.add(listener) }
+        internal fun removeStateListener(listener: () -> Unit) { stateListeners.remove(listener) }
 
         /** Permission alone or another VPN is insufficient: our DNS reader must be alive. */
         fun isReady(context: Context): Boolean = try {
@@ -40,20 +43,23 @@ class DnsFilterService : VpnService() {
         } catch (_: RuntimeException) { false }
 
         internal fun disconnect() { activeService?.closeTunnel() }
+        internal fun refreshBetaScope() { activeService?.mainHandler?.post { activeService?.applyBetaScope() } }
     }
 
     @Volatile private var tun: ParcelFileDescriptor? = null
     @Volatile private var reader: Thread? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    // Bound pending UDP work; DNS clients retry packets if a burst exceeds this capacity.
-    private val pool = ThreadPoolExecutor(8, 8, 30, TimeUnit.SECONDS,
-        ArrayBlockingQueue<Runnable>(128)).apply { allowCoreThreadTimeOut(true) }
+    private val work = DnsWorkQueue()
+    private val ruleCache = ParsedValueCache<List<DomainRule>, DomainRules>(::DomainRules)
     private val upstreamSockets = mutableSetOf<DatagramSocket>()
     @Volatile private var running = false
+    private var appliedScope = emptySet<String>()
+    private fun betaScope(): Set<String> = if (BetaStore.enabled(this) && BetaStore.config(this).on("dnsAll")) setOf("*") else
+        setOf(TARGET_PKG) + if (BetaStore.enabled(this) && BetaStore.config(this).on("dnsScope")) BetaStore.config(this).dnsApps else emptySet()
+    private fun applyBetaScope() { if (hasLiveTunnel() && betaScope() != appliedScope) { closeTunnel(); if (!startFilter()) stopSelf() } }
 
     override fun onCreate() {
         super.onCreate()
-        EnforcementRecovery.recover(this)
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(
             "google_vpn", "Google VPN filter", NotificationManager.IMPORTANCE_LOW))
@@ -69,6 +75,7 @@ class DnsFilterService : VpnService() {
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(2, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else startForeground(2, notification)
+        EnforcementRecovery.arm(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -88,7 +95,7 @@ class DnsFilterService : VpnService() {
 
     override fun onDestroy() {
         closeTunnel()
-        pool.shutdownNow()
+        work.shutdownNow()
         super.onDestroy()
     }
 
@@ -104,7 +111,7 @@ class DnsFilterService : VpnService() {
         tun = null
         reader?.interrupt()
         reader = null
-        pool.queue.clear()
+        work.clear()
         upstreamSockets.forEach { it.close() }
         upstreamSockets.clear()
         if (activeService === this) activeService = null
@@ -114,26 +121,38 @@ class DnsFilterService : VpnService() {
     }
 
     private fun notifyPolicy() {
-        mainHandler.post { Policy.sweep(applicationContext) }
+        mainHandler.post { stateListeners.forEach { it() } }
+        val app = applicationContext
+        policyWorker.execute {
+            try { Policy.sweep(app) }
+            catch (error: RuntimeException) {
+                android.util.Log.e("Gouge", "VPN policy refresh will retry through protection service", error)
+            }
+        }
     }
 
     @Synchronized
     private fun startFilter(): Boolean {
         return try {
-            val fd = Builder()
+            val scope = betaScope()
+            val builder = Builder()
                 .setSession("Gouge DNS filter")
                 .setMtu(1500)
                 .addAddress(CLIENT_ADDR, 32)
                 .addDnsServer(DNS_ADDR)
                 .addRoute(DNS_ADDR, 32)               // only DNS goes through us
-                .addAllowedApplication(TARGET_PKG)    // and only from the Google app
                 .setBlocking(true)
-                .establish() ?: run { notifyPolicy(); return false }
+            // Google is always retained; missing optional packages must not tear down its filter.
+            if ("*" in scope) builder.addDisallowedApplication(packageName)
+            else scope.forEach { pkg -> try { builder.addAllowedApplication(pkg) } catch (e: android.content.pm.PackageManager.NameNotFoundException) { if (pkg == TARGET_PKG) throw e } }
+            val fd = builder.establish() ?: run { notifyPolicy(); return false }
+            appliedScope = scope
             tun = fd
             running = true
             reader = Thread({ loop(fd) }, "InstallLock-DNS").also { it.start() }
             activeService = this
             notifyPolicy()
+            LockService.ensureStarted(this)
             true
         } catch (_: Exception) {
             closeTunnel()
@@ -151,8 +170,12 @@ class DnsFilterService : VpnService() {
                 if (!running || tun !== fd) break
                 if (n < 0) break
                 val request = DnsPacket.request(buf, n) ?: continue
-                try { pool.execute { if (running && tun === fd) handle(fd, output, request.query, request.clientIp, request.clientPort) } }
-                catch (_: RejectedExecutionException) { /* Drop this UDP packet; keep the tunnel alive. */ }
+                val parsed = parseQuestion(request.query)
+                val blocked = parsed != null && isBlocked(parsed.first)
+                work.execute(blocked) {
+                    if (running && tun === fd) handle(fd, output, request.query, request.clientIp,
+                        request.clientPort, parsed, blocked)
+                }
             }
         } catch (_: Exception) { }
         finally {
@@ -160,20 +183,29 @@ class DnsFilterService : VpnService() {
         }
     }
 
-    private fun handle(fd: ParcelFileDescriptor, out: FileOutputStream, query: ByteArray, clientIp: ByteArray, clientPort: Int) {
+    private fun handle(fd: ParcelFileDescriptor, out: FileOutputStream, query: ByteArray, clientIp: ByteArray,
+                       clientPort: Int, parsed: Pair<String, Int>?, blocked: Boolean) {
         try {
-            val parsed = parseQuestion(query)
-            if (parsed != null && (Store.isBlocked(this, parsed.first) ||
-                        DomainRules(Store.domainRules(this)).match(parsed.first)?.rule?.action == DomainAction.BLOCK)) {
-                DnsLog.add(parsed.first, true)
+            // Queued lookups must also see rules changed while they were waiting.
+            val deny = blocked || (parsed != null && isBlocked(parsed.first))
+            if (deny && parsed != null) {
                 reply(fd, out, clientIp, clientPort, nxdomain(query, parsed.second))
+                DnsLog.add(parsed.first, true)
                 return
             }
             if (parsed != null) DnsLog.add(parsed.first, false)
             val answer = forward(fd, query) ?: return
-            reply(fd, out, clientIp, clientPort, answer)
+            // A temporary window or a rule can change while the upstream socket is waiting.
+            if (parsed != null && isBlocked(parsed.first)) {
+                reply(fd, out, clientIp, clientPort, nxdomain(query, parsed.second))
+                DnsLog.add(parsed.first, true)
+            } else reply(fd, out, clientIp, clientPort, answer)
         } catch (_: Exception) { }
     }
+
+    private fun isBlocked(host: String): Boolean =
+        BetaStore.blocks(this, host) || GoogleImagesWindow.isBlocked(host, Store.blockedDomains(this),
+            GoogleImagesAccess.bypassesImageBlock(this, host), ruleCache.get(Store.domainRules(this)))
 
     /** Returns (lowercase name, offset just past the question) or null if malformed. */
     private fun parseQuestion(q: ByteArray): Pair<String, Int>? {

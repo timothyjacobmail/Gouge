@@ -1,6 +1,6 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeWindowsChanged"
-    android:packageNames="com.iqoo.powersaving,com.vivo.abe,com.android.settings"
+    android:packageNames="com.iqoo.powersaving,com.vivo.abe,com.android.settings,com.android.vending"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:notificationTimeout="0"

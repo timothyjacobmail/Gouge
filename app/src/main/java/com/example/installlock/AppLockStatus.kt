@@ -22,13 +22,15 @@ data class AppLockReasons(
     val bankingMode: Boolean = false,
     val bankingListUntil: Long? = null,
     val redditServiceMissing: Boolean = false,
-    val playStoreServiceMissing: Boolean = false
+    val playStoreServiceMissing: Boolean = false,
+    val betaReasons: List<String> = emptyList()
 ) {
     val shouldLock: Boolean get() = keywordServiceMissing || appLock || installWaitUntil != null ||
             otherBrowser || curboxMissing || neverInstallRule != null || googleVpnMissing || domainServiceMissing || curfewUntil != null ||
-            categoryCooldownUntil != null || categoryServiceMissing || focusUntil != null || bankingListUntil != null || redditServiceMissing || playStoreServiceMissing
+            categoryCooldownUntil != null || categoryServiceMissing || focusUntil != null || bankingListUntil != null || redditServiceMissing || playStoreServiceMissing || betaReasons.isNotEmpty()
 
     fun descriptions(): List<String> = buildList {
+        addAll(betaReasons.map { "Beta profile: $it" })
         if (playStoreServiceMissing) add("Play Store's two-minute opening delay needs Gouge's accessibility service. Enable it and finish banking mode to open Play Store.")
         if (redditServiceMissing) add("The subreddit allowlist requires Gouge's accessibility service. " +
             "Reddit and registered Reddit clients stay locked while monitoring is disconnected, including during banking mode. " +

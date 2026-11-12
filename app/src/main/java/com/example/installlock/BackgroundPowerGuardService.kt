@@ -1,6 +1,7 @@
 package com.example.installlock
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Handler
@@ -16,11 +17,12 @@ import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.TextView
 import android.widget.Toast
 
-/** Reads only system power/settings windows. Browser monitoring is a separate service. */
+/** Reads system power/settings content; Play Store fallback uses foreground package identity only. */
 class BackgroundPowerGuardService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var shield: View? = null
     private var lastNotice = 0L
+    private var lastPlayStoreRedirect = 0L
     private val check = Runnable { inspect() }
 
     override fun onServiceConnected() {
@@ -33,6 +35,7 @@ class BackgroundPowerGuardService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        guardPlayStore(event?.takeIf { it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }?.packageName?.toString())
         handler.removeCallbacks(check)
         handler.post(check)
     }
@@ -62,6 +65,7 @@ class BackgroundPowerGuardService : AccessibilityService() {
     private fun inspect() {
         if (BankingMode.active(this)) { onInterrupt(); disableSelf(); return }
         try {
+            guardPlayStore()
             val root = powerWindow()
             if (!Policy.isOwner(this) || root == null ||
                 !BackgroundPowerGuardRules.protects(snapshot(root), getString(R.string.app_name))) {
@@ -86,6 +90,28 @@ class BackgroundPowerGuardService : AccessibilityService() {
         } catch (e: RuntimeException) {
             Log.e("InstallLock", "Could not inspect background-power settings", e)
             removeShield()
+        }
+    }
+
+    private fun guardPlayStore(windowPackage: String? = null) {
+        if (BankingMode.active(this) || !PlayStoreDelayStore.enabled(this) || BrowserKeywordService.isReady(this) ||
+            getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPlayStoreRedirect < 1000) return
+        try {
+            val pkg = if (windowPackage == PlayStoreDelayStore.PACKAGE) windowPackage else {
+                val apps = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                val root = (apps.firstOrNull { it.isFocused } ?: apps.firstOrNull { it.isActive })?.root
+                    ?: rootInActiveWindow
+                root?.let { try { it.packageName?.toString() } finally { @Suppress("DEPRECATION") it.recycle() } }
+            }
+            if (pkg != PlayStoreDelayStore.PACKAGE) return
+            lastPlayStoreRedirect = now
+            PlayStoreDelayStore.endSession()
+            Log.i("InstallLockPlayStore", "Background guard blocking Play Store while browser monitor is disconnected")
+            startActivity(PlayStoreDelayActivity.openIntent(this))
+        } catch (error: RuntimeException) {
+            Log.w("InstallLockPlayStore", "Play Store fallback will retry on the next window event", error)
         }
     }
 
@@ -142,6 +168,9 @@ class BackgroundPowerGuardService : AccessibilityService() {
     companion object {
         @Volatile internal var connected = false
         @Volatile private var instance: BackgroundPowerGuardService? = null
+        internal fun enforcePlayStoreFallback() {
+            instance?.let { service -> service.handler.post { service.guardPlayStore() } }
+        }
         internal fun pauseForBanking() {
             instance?.let { service -> service.handler.post {
                 if (BankingMode.active(service)) { service.onInterrupt(); service.disableSelf() }

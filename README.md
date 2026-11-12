@@ -6,6 +6,8 @@ Gouge is an Android self-control app that uses **device-owner management** to de
 
 **Start here:** [install the app](#installation), complete [first-run setup](#first-run-setup), then use the dashboard search to find any feature described below.
 
+**Opt-in beta:** the hamburger menu → **Beta features** contains the selected experimental profiles, limits, feed controls, DNS scope/categories and local accountability companion. Everything starts off. Read [beta features and limits](docs/beta-features.md) before enabling or committing a profile. The same APK can act as a companion on a second phone without Device Owner provisioning.
+
 > **Before enrolling your phone:** this app can suspend apps, prevent uninstall/force-stop, and uninstall apps matching the never-install list. The shipped default never-install rules include **`grok` and `webtoon`**. Matches can be removed automatically, including their data. A focus session cannot be cancelled early. Back up important data and understand these controls before making Gouge device owner.
 
 ## Installation
@@ -122,6 +124,8 @@ Open the Play Store using **Apps → Open Play Store**. The app waits before gra
 
 **Play Store opening delay** controls this wait separately from the delay imposed on a newly installed app. Changing or disabling the opening wait uses its own saved task credential and delay. Curfew, focus and cooldowns can still prevent Play Store access after its countdown finishes.
 
+The background-power guard also uses Play Store's foreground identity to show the block screen if browser monitoring disconnects. It does not read Store content. Reconnect the browser monitor before opening Store after the wait; keep the guard enabled for this fallback.
+
 ### Never-install list
 
 Rules match installed non-system app names or package identities. Matches are suspended and scheduled for uninstallation, including matching apps already installed when a rule is added. Uninstallation deletes that app's data. Adding a rule is immediate; removing one is delayed.
@@ -194,7 +198,11 @@ If Google results are covered, use **Start a new Google search** to submit anoth
 
 **Google VPN filter → Turn on** starts the per-app DNS-filtering VPN for the Google app. It restricts image/video-serving domains and applies relevant domain rules. It does not route all phone traffic or decrypt HTTPS pages. Other apps are outside this per-app VPN.
 
+Blocked DNS requests are rejected locally without waiting for upstream lookups. Images already cached by Google, existing connections, and images delivered from allowed search domains can still appear; DNS filtering cannot remove already rendered images.
+
 Use **DNS log / tune blocklist** to inspect DNS activity and refine blocked domains. Unblocking domains or turning off the VPN is delayed. Google remains locked while its required VPN is unavailable, even if keyword filtering is off or temporary app access was granted. Android generally allows one active VPN per user, so another VPN can conflict with this feature.
+
+For temporary image access, open **Google VPN filter → Temporary Google Images**, choose a duration and confirm with the existing **Unblock Google DNS domains** password. Its saved delay applies. Access starts after the task completes, with a notification when allowed, and lasts for the selected duration (up to the global maximum unlock duration). The VPN stays running, so this feature does not trigger Google's missing-VPN lock. It temporarily exempts the built-in image hosts; video-host blocks, extra DNS blocks, ordered domain rules, keywords and other app locks continue. Refresh results when access starts. Use **Block images again now** to end early; expiry or reboot restores blocking for new lookups. Already cached images and connections may persist.
 
 ### Reddit subreddit allowlist
 

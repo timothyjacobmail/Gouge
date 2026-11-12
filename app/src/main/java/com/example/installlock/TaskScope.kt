@@ -20,6 +20,7 @@ enum class TaskKind(val title: String, val perApp: Boolean = false) {
     TIMING("Change durations and waiting periods"),
     CATEGORIES("Change immediate-access categories"),
     PLAY_STORE_DELAY("Change Play Store opening delay"),
+    BETA_CHANGE("Relax beta restrictions"),
     SECURITY("Change password lockout settings"),
     ENROLL_APP("Set up passwords for newly locked apps"),
     APP_UNLOCK("Temporary access", true),
@@ -144,6 +145,12 @@ internal class TaskVault(private val data: TaskData, private val now: () -> Long
         changes["task.scopes"] = (scopes() + scope).joinToString("\n") { it.id }
         changes[prefix(scope) + "delayMinutes"] = "2"
         return if (data.write(changes)) null else "Could not save Play Store delay password."
+    }
+    fun installBeta(password: String): String? {
+        val scope = TaskScope(TaskKind.BETA_CHANGE)
+        if (!ready() || has(scope) || !isSeparatePassword(scope, password)) return "Only the missing beta credential can be enrolled."
+        return if (data.write(record(NewTaskPassword(scope, password)) +
+                ("task.scopes" to (scopes() + scope).joinToString("\n") { it.id }))) null else "Could not save beta credential."
     }
     fun change(scope: TaskScope, old: String, password: String, share: Boolean): String? {
         if (!StorePasswordRules.valid(password)) return "Use 8 or more characters, including a letter and a number."

@@ -148,7 +148,7 @@ internal object ScheduledTasks {
     fun nextDelay(c: Context): Long? {
         val now = WatchdogStore.clock(c)
         return listOfNotNull(all(c, now).filter { it.result.isEmpty() }.minOfOrNull { it.countdown.remaining(now) },
-            TemporaryLinks.nextDelay(c)).minOrNull()
+            TemporaryLinks.nextDelay(c), GoogleImagesAccess.nextDelay(c)).minOrNull()
     }
 
     fun reschedule(c: Context) {
@@ -207,6 +207,7 @@ internal object ScheduledTasks {
     }
 
     fun reconcileAsync(c: Context) {
+        GoogleImagesAccess.reconcile(c)
         if (nextDelay(c) != 0L || !running.compareAndSet(false, true)) return
         val context = c.applicationContext
         executor.execute {
@@ -222,6 +223,7 @@ class ScheduledTaskReceiver : BroadcastReceiver() {
         val pending = goAsync()
         Thread {
             try {
+                GoogleImagesAccess.reconcile(context)
                 TemporaryLinks.reconcile(context)
                 ScheduledTasks.applyDue(context)
                 Policy.syncChrome(context)

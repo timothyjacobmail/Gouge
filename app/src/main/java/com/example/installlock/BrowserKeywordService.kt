@@ -46,6 +46,7 @@ class BrowserKeywordService : AccessibilityService() {
     private val prefs by lazy { getSharedPreferences("install_lock", Context.MODE_PRIVATE) }
     private val redditMonitor by lazy { RedditMonitor(this, handler) }
     private val playStoreMonitor by lazy { PlayStoreMonitor(this, handler) }
+    private val betaMonitor by lazy { BetaMonitor(this) { root, pkg -> browserAddress(root, pkg, visibleOnly = false) } }
     private val watchdogWarnings by lazy { WatchdogWarningBanner(this) }
     private val categoryWatchdog by lazy {
         WebsiteWatchdogMonitor(this, handler, { targets }, watchdogWarnings) { root, browser -> browserHost(root, browser, visibleOnly = false) }
@@ -115,6 +116,7 @@ class BrowserKeywordService : AccessibilityService() {
         rapidScrollWatchdog.start()
         redditMonitor.start()
         playStoreMonitor.start()
+        betaMonitor.start()
         Policy.sweep(this)
         scheduleScan(0)
     }
@@ -169,7 +171,13 @@ class BrowserKeywordService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (BankingMode.active(this)) return
-        playStoreMonitor.check(event?.takeIf { it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED }?.packageName?.toString())
+        if (event != null && BetaStore.enabled(this)) betaMonitor.event(event)
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            playStoreMonitor.check(event.packageName?.toString())
+        } else if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
+            event.windowChanges and (AccessibilityEvent.WINDOWS_CHANGE_ACTIVE or AccessibilityEvent.WINDOWS_CHANGE_FOCUSED) != 0) {
+            playStoreMonitor.check(focusChanged = true)
+        }
         if (event != null) redditMonitor.onEvent(event)
         try { SecretClipboard.onAccessibilityEvent(event) } catch (_: RuntimeException) {
             // A transient clipboard or accessibility error must not interrupt browser enforcement.
@@ -534,6 +542,7 @@ class BrowserKeywordService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        betaMonitor.stop(detach = true)
         playStoreMonitor.stop()
         redditMonitor.stop()
         categoryWatchdog.stop()
@@ -546,6 +555,7 @@ class BrowserKeywordService : AccessibilityService() {
             rapidScrollWatchdog.start()
             redditMonitor.start()
             playStoreMonitor.start()
+            betaMonitor.start()
         }
     }
 
@@ -556,6 +566,7 @@ class BrowserKeywordService : AccessibilityService() {
             SecretClipboard.detachAccessibility()
         }
         onInterrupt()
+        BackgroundPowerGuardService.enforcePlayStoreFallback()
         prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         if (registered) unregisterReceiver(packageReceiver)
         Policy.sweep(this)
@@ -569,6 +580,7 @@ class BrowserKeywordService : AccessibilityService() {
             SecretClipboard.detachAccessibility()
         }
         onInterrupt()
+        BackgroundPowerGuardService.enforcePlayStoreFallback()
         Policy.sweep(this)
         return super.onUnbind(intent)
     }

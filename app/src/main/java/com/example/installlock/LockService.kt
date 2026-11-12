@@ -52,6 +52,7 @@ class LockService : Service() {
         val bankingWait = BankingAppStore.waits(this).values.minOrNull() ?: Long.MAX_VALUE
         val taskDelay = ScheduledTasks.nextDelay(this)
         val next = minOf(CurfewRules.nextBoundary(now, CurfewStore.zone(), CurfewStore.appealedNight(this)),
+            BetaRuntime.nextBoundary(this, now),
             if (cooldown > 0) now + cooldown else Long.MAX_VALUE,
             if (focus > 0) now + focus else Long.MAX_VALUE,
             taskDelay?.let { now + it.coerceAtLeast(1000L) } ?: Long.MAX_VALUE, bankingWait)
@@ -70,6 +71,21 @@ class LockService : Service() {
         override fun run() {
             var next = 5000L
             try {
+                if (BetaStore.enabled(this@LockService) && BetaStore.config(this@LockService).on("recovery")) {
+                    BetaEnforcement.recover(
+                        "Recovery alarm" to { EnforcementRecovery.arm(this@LockService) },
+                        "Accessibility guard" to { BackgroundPowerProtection.ensureEnabled(this@LockService) },
+                        "Temporary links" to { TemporaryLinks.reconcile(this@LockService) },
+                        "Device policy" to { Policy.sweep(this@LockService) },
+                        "Banking mode" to { BankingMode.reconcile(this@LockService) },
+                        "Finance discovery" to { if (BankingAppStore.detectFinance(this@LockService)) BankingCategoryDiscovery.refresh(this@LockService) },
+                        "Clipboard cleanup" to { SecretClipboard.reconcile() },
+                        "Keyword removals" to { Store.applyDueKeywordRemovals(this@LockService) },
+                        "Scheduled tasks" to { ScheduledTasks.reconcileAsync(this@LockService) },
+                        "Retired cleanup" to { RetiredFeatureCleanup.schedule(this@LockService) },
+                        "Beta boundaries" to { next = minOf(next, scheduleBoundary(), Store.timingConfig(this@LockService).milliseconds(TimingOption.POLICY_INTERVAL)) })
+                    return
+                }
                 EnforcementRecovery.arm(this@LockService)
                 BackgroundPowerProtection.ensureEnabled(this@LockService)
                 // Enforcement takes priority over optional task/clipboard maintenance.
@@ -103,6 +119,8 @@ class LockService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        BetaGray.restore(this)
+        alive = true
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel("enforcement_v2", "Gouge protection", NotificationManager.IMPORTANCE_LOW)
         )
@@ -159,6 +177,7 @@ class LockService : Service() {
     }
 
     override fun onDestroy() {
+        alive = false
         EnforcementRecovery.arm(this, soon = true)
         handler.removeCallbacks(tick)
         unregisterReceiver(pkgReceiver)
@@ -176,6 +195,13 @@ class LockService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        @Volatile private var alive = false
+
+        /** VPN startup needs recovery only if protection is not already running. */
+        fun ensureStarted(c: Context) {
+            if (!alive) start(c)
+        }
+
         fun start(c: Context) {
             c.startForegroundService(Intent(c, LockService::class.java))
         }

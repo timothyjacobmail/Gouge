@@ -24,4 +24,46 @@ class PlayStoreForegroundTest {
         assertEquals(store, PlayStoreForeground.resolve(null, store, home, keyboard))
         assertEquals(home, PlayStoreForeground.resolve(home, store, store, keyboard))
     }
+
+    @Test fun vivoSystemPluginCannotBecomeTheForegroundApplication() {
+        assertEquals(store, PlayStoreForeground.resolve("com.vivo.systemuiplugin", null, store, keyboard))
+        assertEquals(home, PlayStoreForeground.resolve(null, "com.vivo.systemuiplugin", home, keyboard))
+        assertNull(PlayStoreForeground.resolve("com.vivo.systemuiplugin", null, null, keyboard))
+    }
+
+    @Test fun focusChangeRecoversAMissedPlayStoreWindowStateEvent() {
+        val state = PlayStoreForegroundState()
+        assertEquals(home, state.resolve(home, null, keyboard))
+        assertEquals(store, state.resolve(null, store, keyboard, focusChanged = true))
+        assertEquals(store, state.resolve("com.vivo.systemuiplugin", null, keyboard))
+    }
+
+    @Test fun ordinaryPollDoesNotReviveVivosStalePlayStoreRootAfterHome() {
+        val state = PlayStoreForegroundState()
+        state.resolve(store, null, keyboard)
+        assertEquals(home, state.resolve(home, store, keyboard))
+        repeat(10) { assertEquals(home, state.resolve(null, store, keyboard)) }
+    }
+
+    @Test fun restartingMonitorDiscardsCachedForegroundAndReadsVisibleStore() {
+        val state = PlayStoreForegroundState()
+        state.resolve(home, null, keyboard)
+        state.reset()
+        assertNull(state.previous)
+        assertEquals(store, state.resolve(null, store, keyboard))
+    }
+
+    @Test fun focusedHomeWindowEndsSessionEvenIfItsStateEventWasMissed() {
+        val state = PlayStoreForegroundState()
+        state.resolve(store, null, keyboard)
+        assertEquals(home, state.resolve(null, home, keyboard, focusChanged = true))
+    }
+
+    @Test fun transientFocusedSystemWindowDoesNotReplaceAnApplication() {
+        val state = PlayStoreForegroundState()
+        state.resolve(store, null, keyboard)
+        assertEquals(store, state.resolve(null, "com.vivo.systemuiplugin", keyboard, focusChanged = true))
+        assertEquals(store, state.resolve(null, keyboard, keyboard, focusChanged = true))
+        assertEquals(store, state.resolve(null, null, keyboard, focusChanged = true))
+    }
 }

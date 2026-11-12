@@ -38,6 +38,7 @@ import java.util.concurrent.Future
 class MainActivity : AppCompatActivity() {
 
     companion object {
+        internal const val ACTION_GOOGLE_IMAGES = "com.example.installlock.GOOGLE_IMAGES"
         internal const val ACTION_LOCK_REASONS = "com.example.installlock.LOCK_REASONS"
         internal const val ACTION_PLAY_STORE_DELAY = "com.example.installlock.PLAY_STORE_DELAY_SETTINGS"
         internal const val ACTION_BANKING_MODE = "com.example.installlock.BANKING_MODE"
@@ -213,6 +214,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openNotificationScreen(): Boolean {
+        if (intent.action == BetaActions.CONFIRM) {
+            val id = intent.getStringExtra("draft").orEmpty()
+            intent = Intent()
+            val draft = BetaStore.draft(this, id) ?: return false
+            if (!Policy.isOwner(this)) return false
+            confirmTask(TaskScope(TaskKind.BETA_CHANGE), draft.title, mapOf("draft" to id))
+            return true
+        }
+        if (intent.action == ACTION_GOOGLE_IMAGES) {
+            intent = Intent()
+            goTo { showTemporaryGoogleImages() }
+            return true
+        }
         if (intent.action == ACTION_PLAY_STORE_DELAY) {
             intent = Intent()
             goTo { showPlayStoreDelaySettings() }
@@ -345,7 +359,8 @@ class MainActivity : AppCompatActivity() {
         current = null
         when {
             !Policy.isOwner(this) -> goTo {
-                screen(label("Not set up as device owner yet.\nProvision via QR code (or adb when testing)."))
+                screen(label("Not set up as device owner yet.\nProvision via QR code (or adb when testing)."),
+                    button("Use as beta accountability companion") { startActivity(Intent(this, BetaCompanionActivity::class.java)) })
             }
             receivedSiteShare -> goTo { showSharedSite() }
             else -> goTo { showDashboard() }
@@ -775,6 +790,7 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
     private fun showMoreProtections() {
         screen(label(getString(R.string.more_protections), 26f),
             curfewActions(), additionalProtections(), watchdogActions(),
+            button("Beta features") { startActivity(Intent(this, BetaActivity::class.java)) },
             button("Back") { back() })
     }
 
@@ -791,6 +807,7 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
     private data class SearchDestination(val title: String, val keywords: String, val open: () -> Unit)
 
     private fun searchDestinations(): List<SearchDestination> = buildList {
+        add(SearchDestination("Beta features", "profiles quota pomodoro grayscale shorts companion DNS beta") { startActivity(Intent(this@MainActivity, BetaActivity::class.java)) })
         add(SearchDestination(getString(R.string.more_protections), "menu hamburger protections") { showMoreProtections() })
         add(SearchDestination("Personal secret vault", "password vault reveal unlock copy import delay") {
             startActivity(Intent(this@MainActivity, com.example.delayedsecrect.MainActivity::class.java))
@@ -822,6 +839,7 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
         add(SearchDestination("Page exceptions", "keyword per-word exceptions allow") { showKeywordExceptions() })
         add(SearchDestination("Generic page exceptions", "keyword generic exceptions allow") { showGenericKeywordExceptions() })
         add(SearchDestination("Google VPN filter", "dns filtering block unblock domain turn off on") { showGoogleFilter() })
+        add(SearchDestination("Temporary Google Images", "images photos temporary access delay vpn") { showTemporaryGoogleImages() })
         add(SearchDestination("Google DNS log", "vpn domain history requests unblock") { showDnsLog() })
         add(SearchDestination("Settings", "general timing durations security waiting periods unlock presets change settings tasks") { showSettings() })
         add(SearchDestination("App updates", "download install upgrade version GitHub") { startActivity(Intent(this@MainActivity, UpdateActivity::class.java)) })
@@ -955,21 +973,37 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
     private fun showGoogleFilter() {
         val msg = label("")
         val status = label("")
+        val betaDns = if (BetaStore.enabled(this)) BetaStore.config(this) else BetaConfig()
+        val scopeDescription = when {
+            betaDns.on("dnsAll") -> "Beta scope routes every app's DNS except Gouge through this filter. "
+            betaDns.on("dnsScope") && betaDns.dnsApps.isNotEmpty() -> "Beta scope routes Google's DNS and ${betaDns.dnsApps.size} selected extra apps through this filter. "
+            else -> "Routes only the Google app's DNS lookups through Gouge. Other apps aren't affected. "
+        }
         fun updateStatus() {
             if (!statusUpdatesActive || !status.isAttachedToWindow) return
             status.text = if (DnsFilterService.isReady(this))
                 "Gouge VPN: running. Other app locks and keyword protection still apply."
             else "Gouge VPN: not running. Google remains locked until this VPN is running."
-            status.postDelayed({ updateStatus() }, 1000)
         }
+        val stateListener: () -> Unit = { updateStatus() }
+        status.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) {
+                DnsFilterService.addStateListener(stateListener)
+                updateStatus()
+            }
+            override fun onViewDetachedFromWindow(view: View) {
+                DnsFilterService.removeStateListener(stateListener)
+            }
+        })
         screen(
             label("Google VPN filter", 22f),
-            label("Routes only the Google app's DNS lookups through Gouge and refuses " +
-                    "the servers that serve images and videos, plus domains blocked by your ordered domain rules. Other apps aren't affected. " +
+            label(scopeDescription + "Refuses the servers that serve images and videos, plus domains blocked by your ordered domain rules" +
+                    (if (betaDns.on("dnsLists")) " and enabled beta category lists. " else ". ") +
                     "Google requires this VPN to be running, even during temporary app unlocks and when keyword filtering is off. " +
                     "Turning the VPN off keeps Google locked until you turn it on again."),
             status,
             msg,
+            button("Temporary Google Images") { goTo { showTemporaryGoogleImages() } },
             button("Turn on") { msg.text = Policy.enableGoogleFilter(this) },
             button("Turn off (delayed task)") {
                 confirmTask(TaskScope(TaskKind.VPN_OFF), "Turn off Google VPN")
@@ -977,7 +1011,64 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
             button("DNS log / tune blocklist") { goTo { showDnsLog() } },
             button("Back") { back() }
         )
-        status.post { updateStatus() }
+        status.post(object : Runnable {
+            override fun run() {
+                if (statusUpdatesActive && status.isAttachedToWindow) {
+                    updateStatus()
+                    status.postDelayed(this, 1000)
+                }
+            }
+        })
+    }
+
+    private fun showTemporaryGoogleImages() {
+        val cap = Store.timingConfig(this)[TimingOption.MAX_UNLOCK]
+        val minutes = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            hint = "Access duration in minutes (1–$cap)"
+            setText(Store.timingConfig(this@MainActivity)[TimingOption.DEFAULT_UNLOCK].coerceAtMost(cap).toString())
+        }
+        val status = label("")
+        val request = primaryButton("Request temporary image access") {
+            val duration = minutes.text.toString().toIntOrNull()
+            val currentCap = Store.timingConfig(this)[TimingOption.MAX_UNLOCK]
+            if (duration == null || duration !in 1..currentCap) minutes.error = "Enter 1 to $currentCap minutes."
+            else confirmTask(TaskScope(TaskKind.DNS_UNBLOCK), "Google Images for $duration minutes",
+                mapOf("imagesMinutes" to duration))
+        }
+        val end = button("Block images again now") {
+            GoogleImagesAccess.end(this)
+            ScheduledTasks.reschedule(this)
+            reopen()
+        }
+        fun refresh() {
+            val left = GoogleImagesAccess.remaining(this)
+            val seconds = (left + 999) / 1000
+            status.text = if (left > 0) "Image access active: ${seconds / 60}m ${seconds % 60}s remaining."
+                else "No temporary image access is active. Pending requests appear in Pending tasks."
+            if (!DnsFilterService.isReady(this)) status.append("\nTurn on Google VPN filter to use Google.")
+            request.isEnabled = left == 0L
+            end.visibility = if (left > 0) View.VISIBLE else View.GONE
+        }
+        screen(label("Temporary Google Images", 22f),
+            label("Choose a duration, then confirm with your Google DNS-unblock password. Its saved delay applies. " +
+                "Access starts when that delay finishes; Gouge sends a notification when notifications are allowed."),
+            label("The VPN stays on, so this does not lock Google by switching it off. Built-in image-host blocks " +
+                "resume automatically. Video blocks, your website rules, keywords and other app locks still apply. " +
+                "Cached images may remain visible after access ends. Restarting the phone ends access."),
+            status, minutes, request, end,
+            button("Pending tasks") { goTo { showScheduledTasks() } },
+            button("Google VPN filter") { goTo { showGoogleFilter() } },
+            button("Back") { back() })
+        refresh()
+        status.postDelayed(object : Runnable {
+            override fun run() {
+                if (statusUpdatesActive && status.isAttachedToWindow && !isFinishing && !isDestroyed) {
+                    refresh()
+                    status.postDelayed(this, 1000)
+                }
+            }
+        }, 1000)
     }
 
     private fun showDnsLog() {

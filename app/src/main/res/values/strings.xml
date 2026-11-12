@@ -1,7 +1,8 @@
 <resources>
+    <string name="beta_widget_description">Observed usage and short-video counts for beta profiles</string>
     <string name="app_name">Gouge</string>
     <string name="background_power_guard_name">Gouge background-power settings guard</string>
-    <string name="background_power_guard_description">Keeps Gouge background power allowed by blocking changes on its own system power-setting page. Inspects only system Settings and Vivo power-management windows. Other apps\' power settings remain available. Administrator provisioning maintains this guard when its switch is turned off.</string>
+    <string name="background_power_guard_description">Keeps Gouge background power allowed by blocking changes on its own system power-setting page. Reads only system Settings and Vivo power-management content. Also checks Play Store foreground identity, without reading its content, to show the block screen if browser monitoring disconnects. Other apps\' power settings remain available. Administrator provisioning maintains this guard when its switch is turned off.</string>
     <string name="ui_back">Back</string>
     <string name="more_protections">More protections</string>
     <string name="open_more_protections">Open more protections</string>

@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TaskVaultTest {
+    @Test fun betaUpgradeCannotReplaceCredentialsOrAuthorizeUnrelatedTasks() {
+        val data=Memory(); val v=TaskVault(data)
+        val stable=TaskScope(TaskKind.WHITELIST_ADD); val beta=TaskScope(TaskKind.BETA_CHANGE)
+        assertNull(v.install(listOf(NewTaskPassword(stable,"ExistingPassword1")),false))
+        assertNotNull(v.installBeta("ChosenPassword1"))
+        val generated=TaskVault.generatePassword(beta)
+        assertNull(v.installBeta(generated)); assertNotNull(v.installBeta(TaskVault.generatePassword(beta)))
+        assertTrue(v.check(beta,generated)); assertFalse(v.check(stable,generated)); assertTrue(v.check(stable,"ExistingPassword1"))
+    }
     @Test fun cachedPasswordVerificationStillHonorsCurrentLockoutAndPasswordChanges() {
         val data = Memory()
         val scope = TaskScope(TaskKind.REDDIT_ALLOW)

@@ -85,10 +85,15 @@ object Policy {
     fun lockStatuses(c: Context): List<AppLockStatus> = reconcile(c, collectStatus = true)
 
     fun sweep(c: Context) {
+        if (BetaStore.enabled(c) && BetaStore.config(c).on("worker")) { BetaEnforcement.request(c); return }
+        sweepCurrent(c)
+    }
+
+    internal fun sweepCurrent(c: Context) {
         reconcile(c, collectStatus = false)
     }
 
-    private fun reconcile(c: Context, collectStatus: Boolean, releaseTargets: Set<String> = emptySet()): List<AppLockStatus> {
+    @Synchronized private fun reconcile(c: Context, collectStatus: Boolean, releaseTargets: Set<String> = emptySet()): List<AppLockStatus> {
         if (!isOwner(c)) return emptyList()
         enforceNoUninstall(c)
         val dpm = dpm(c)
@@ -102,6 +107,7 @@ object Policy {
         val focusRemaining = FocusLockStore.remaining(c)
         val focusTargets = FocusLockStore.targets(c)
         val focusManaged = FocusLockStore.managed(c)
+        val betaManaged = BetaStore.managed(c)
         val discoveredBrowsers = BrowserPackages.discover(c)
         val browserTargets = discoveredBrowsers + BrowserPackages.GOOGLE_APP
         val monitoredTargets = browserTargets + ShortFormFeeds.nativePackages + redditTargets
@@ -173,7 +179,7 @@ object Policy {
             // Previously guarded system apps must also be processed so they can be resumed.
             if (isSystem && !isProtected && !isBrowser && !isGuarded &&
                 !keywordPaused && !isGoogle && name !in previousKeywordGuard && name !in releaseTargets && name !in curfewManaged &&
-                name !in cooldownTargets && name !in focusManaged && name !in bankingManaged && name != PlayStoreDelayStore.PACKAGE) {
+                name !in cooldownTargets && name !in focusManaged && name !in bankingManaged && name !in betaManaged && name != PlayStoreDelayStore.PACKAGE) {
                 // Read status without changing policy for unrelated system apps.
                 if (name == CHROME) record(pkg, info, AppLockReasons())
                 continue
@@ -200,7 +206,8 @@ object Policy {
                 rapidScrollCooldown = rapidCooldown,
                 bankingMode = BankingMode.active(c) && keywordPaused,
                 bankingListUntil = bankingWaits[name],
-                playStoreServiceMissing = name == PlayStoreDelayStore.PACKAGE && PlayStoreDelayStore.enabled(c) && !BrowserKeywordService.isReady(c)
+                playStoreServiceMissing = name == PlayStoreDelayStore.PACKAGE && PlayStoreDelayStore.enabled(c) && !BrowserKeywordService.isReady(c),
+                betaReasons = if (name in betaManaged) BetaStore.reasons(c, name, now) else emptyList()
             )
             val shouldLock = reasons.shouldLock
             try {
@@ -293,7 +300,7 @@ object Policy {
     }
 
     /** Reconcile with Android's actual restrictions; a saved "sent" flag can become stale. */
-    fun syncChrome(c: Context, force: Boolean = false) {
+    @Synchronized fun syncChrome(c: Context, force: Boolean = false) {
         if (!isOwner(c)) return
         JudgeStore.refreshStale(c)
         try {
@@ -304,8 +311,10 @@ object Policy {
                 Store.extraLockedSites(c).map { it.domain }, Store.domainRules(c),
                 synchronized(observedChromeAllows) { observedChromeAllows.toSet() }, JudgeStore.active(c), JudgeStore.eligible(c),
                 TemporaryLinks.activeUrls(c))
-            if (updated == null && !force) return
-            manager.setApplicationRestrictions(owner, CHROME, updated ?: Bundle(current))
+            val combined = BetaChrome.update(c, current, updated ?: Bundle(current))
+            if (BetaChrome.equal(current, combined) && !force) { BetaChrome.restored(c); return }
+            manager.setApplicationRestrictions(owner, CHROME, combined)
+            BetaChrome.restored(c)
             if (RESTART_CHROME_ON_CHANGE) bounceChrome(c)
         } catch (e: Exception) {
             // Leave reconciliation pending: the next service tick will try again.
@@ -338,9 +347,14 @@ object Policy {
         return try {
             // Device-wide VPN lockdown would also block unrelated apps. Google itself
             // stays suspended until our DNS tunnel is ready instead.
-            dpm(c).setAlwaysOnVpnPackage(admin(c), c.packageName, false)
+            val manager = dpm(c)
+            val owner = admin(c)
+            if (manager.getAlwaysOnVpnPackage(owner) != c.packageName)
+                manager.setAlwaysOnVpnPackage(owner, c.packageName, false)
+            if (DnsFilterService.isReady(c)) return "Gouge's VPN is already running. Other protections still apply."
             c.startForegroundService(Intent(c, DnsFilterService::class.java))
-            sweep(c)
+            // The service reconciles restrictions once its reader is ready. A full package
+            // scan here blocks the same main thread needed to create that reader.
             "Starting Gouge's VPN. Google remains locked until it is running; other protections still apply."
         } catch (e: Exception) {
             "Error: ${e.message}"

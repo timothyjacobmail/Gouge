@@ -30,6 +30,12 @@ internal object TaskPasswords {
     fun has(c: Context, scope: TaskScope) = vault(c).has(scope)
     fun remaining(c: Context, scope: TaskScope) = vault(c).remaining(scope)
     fun scopes(c: Context) = vault(c).scopes()
+    @Synchronized fun setupBeta(c: Context): String? {
+        val scope = TaskScope(TaskKind.BETA_CHANGE)
+        if (!ready(c)) return "Set up task passwords in Gouge first."
+        if (!has(c, scope)) vault(c).installBeta(TaskVault.generatePassword(scope))?.let { return it }
+        return if (NativeTaskPasswords.password(c, scope) == null) "Attach the existing beta task password in Task passwords first." else null
+    }
     @Synchronized fun setupPlayStoreDelay(c: Context): String? {
         val scope = TaskScope(TaskKind.PLAY_STORE_DELAY)
         if (!ready(c)) return "Set up task passwords first."
