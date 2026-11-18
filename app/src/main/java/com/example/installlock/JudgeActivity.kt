@@ -43,7 +43,7 @@ class JudgeActivity : AppCompatActivity() {
             inspect.isEnabled = false
             address.isEnabled = false
             open.visibility = View.GONE
-            result.text = "Reading the public page and checking its destination…"
+            result.text = "Checking the destination and public content (up to 10 seconds)…"
             job = executor.submit {
                 val judgement = try {
                     val policy = JudgeStore.snapshot(applicationContext)
@@ -82,10 +82,10 @@ class JudgeActivity : AppCompatActivity() {
             setPadding(padding, padding, padding, padding)
             addView(UiStyle.label(this@JudgeActivity, "Judge", 26f))
             addView(UiStyle.label(this@JudgeActivity, "Known leisure sites always keep the normal whitelist delay, including educational pages on social or entertainment platforms."))
-            addView(UiStyle.label(this@JudgeActivity, "Judge uses your current whitelist, blocked words, exceptions, domain rules and extra locks automatically. Completed whole-site approvals can teach it exact hosts; broad suffix rules and path-only approvals cannot. Readable useful content is still required. Unknown or leisure sites keep their delay."))
+            addView(UiStyle.label(this@JudgeActivity, "Judge can approve a new practical site when its visible identity and substantive document, technical, professional, public-service or study content agree. Completed whitelist approvals also help. Your blocked words, exceptions, domain rules and extra locks apply automatically. Leisure, mixed-purpose and uncertain sites keep their delay."))
             val policy = JudgeStore.snapshot(this@JudgeActivity)
             addView(UiStyle.label(this@JudgeActivity, "Local tuning: ${policy.learnedHosts.size} eligible hosts from completed whole-site approvals, ${policy.blockedWords.size} blocked words, ${policy.extraLocks.size} extra locked sites. Rule changes deactivate old Judge grants until an automatic recheck succeeds; you can also check manually."))
-            addView(UiStyle.label(this@JudgeActivity, "Bundled reviewed services: ${JudgeRules.reviewedServiceNames.joinToString("; ")}. Each host must pass its own content check; other subdomains and links are not approved."))
+            addView(UiStyle.label(this@JudgeActivity, "Reviewed services: ${JudgeRules.reviewedServiceNames.joinToString("; ")}. Google links with an embedded destination are decoded locally. Sign-in tokens are not fetched for inspection. Approvals cover only the checked host."))
             addView(address); addView(inspect); addView(result); addView(open)
             addView(UiStyle.button(this@JudgeActivity, "Use normal delayed whitelist") {
                 startActivity(BlockedSiteActivity.whitelistIntent(this@JudgeActivity, address.text.toString()))

@@ -223,12 +223,15 @@ Open **Judge** from Browser & Google, the Chrome whitelist, or a blocked Chrome 
 | Emirates Driving Company | `edcad.ae`, `www.edcad.ae`, `pay.edcad.ae`, `elearning.edcad.ae` |
 | iLovePDF document tools | `ilovepdf.com`, `www.ilovepdf.com` |
 | Adhoc Safety fire/security services | `adhocsafety.com`, `www.adhocsafety.com` |
+| Claude AI assistant | `claude.ai` |
 
-Each host must pass its own content check for that service's identity and purpose and your current personal block rules. A positive result grants separate exact-host HTTPS access; it does not grant arbitrary subdomains or follow-on links.
+Each public page must pass its own identity, purpose and personal block checks. Claude's exact official `/magic-link` sign-in endpoint is recognized without fetching or consuming its one-time credential. A positive result grants separate exact-host HTTPS access; it does not grant arbitrary subdomains or follow-on links.
 
-Known leisure platforms—including YouTube, Reddit, Instagram, Facebook, X/Twitter, MangaDex, Weeb Central, DeviantArt, and Chess.com—cannot receive Judge approvals, even for educational-looking pages. Unknown, mixed-purpose, login-only, unreadable, or anti-bot-blocked pages keep the normal delay. Other sites can also qualify from your completed whole-site whitelist, but unfamiliar sites without that explicit approval still use the delay.
+Known leisure platforms—including YouTube, Reddit, Instagram, Facebook, X/Twitter, MangaDex, Weeb Central, DeviantArt, and Chess.com—cannot receive Judge approvals, even for educational-looking pages. Mixed-purpose, unreadable, anti-bot-blocked and insufficiently evidenced pages keep the normal delay. **New practical sites can now qualify without already being whitelisted:** the visible title/heading must match the host identity, and at least 200 characters of main content must provide multiple matching signals for document tools, technical documentation, professional services, public services or study resources. A few useful words or an unrelated copied brand do not qualify. Completed whole-site approvals provide a separate route.
 
 **Automatic local tuning:** Judge consults your current completed whitelist, blocked words and exceptions, extra locks, Google DNS blocks, ordered rules and manga list. Completed whole-site entries can teach only their exact non-leisure host (plus its conventional `www` variant for a two-label domain), with useful-content evidence still required. Pending/path-only approvals and broad suffix Allow rules never become blanket trust. Relevant rule changes or app upgrades invalidate old Judge grants until a fresh check; existing normal whitelist entries remain intact. While monitoring is active, Judge automatically rechecks previously granted eligible hosts after rule changes, retrying failed checks at most once per five minutes per host. Your private preferences stay on the phone and are not bundled into public releases.
+
+**Fast, private link handling:** embedded Google `/url?q=…` and `/url?url=…` destinations are decoded locally with no request or loading screen. Genuine Google sharing links have a six-second total check limit; Judge has a ten-second total check limit including DNS and redirects. One-time sign-in links are never fetched to inspect their content; the original fragment/query is kept only in memory for opening, and permanent whitelist choices omit it.
 
 Judge is **not a foolproof classifier of the entire web**. Other protections remain active; Judge approvals require connected browser monitoring. The Judge page does not display the saved approval list. An existing independent Allow rule or manual whitelist approval is separate from Judge and can still permit a site. See [coverage, enforcement, and limitations](docs/judge.md).
 
@@ -275,7 +278,7 @@ Updates are user-initiated, not silently scheduled. Version 1.5 needs a one-time
 | An app is still locked after a timer ends | Open **Why apps are locked → Refresh**. Clear every applicable reason, not just one. |
 | Browsers, Google, Reddit or feeds remain suspended | Check browser accessibility is enabled **and connected**, banking mode is finished, and other restrictions have cleared. Google also requires its VPN. |
 | Chrome blocks an approved page | Check its exact host/path, extra locks, first-matching domain rule, keyword filters, app suspension, and the approval countdown. Refresh after a new observed-host Allow approval. |
-| Judge refuses a useful site | Check its limited reviewed-host catalog and readable content. Unknown sites keep their delay by design; use the ordinary whitelist. |
+| Judge refuses a useful site | Read the specific reason: blocked word, leisure term, missing identity/purpose evidence, network/challenge or timeout. New practical sites can pass the content checks; uncertain sites still use the ordinary whitelist. |
 | A bank rejects the phone's accessibility state | Use manual banking mode, wait for confirmed shutdown, and check the banking-list wait and other app locks. |
 | A task is waiting or did not apply | Check **Pending tasks**, its credential, and whether reboot restarted the wait. Changed credentials can invalidate old confirmations. |
 | A recent app disappears | Check the never-install list, including the shipped default name rules. |

@@ -6,9 +6,10 @@ import java.util.Locale
 
 internal enum class JudgeDecision { IMMEDIATE, DELAY, UNVERIFIED }
 internal data class Judgement(val decision: JudgeDecision, val reason: String,
-                              val address: String = "", val hosts: Set<String> = emptySet(), val policyRevision: String? = null)
+                              val address: String = "", val hosts: Set<String> = emptySet(), val policyRevision: String? = null,
+                              val contentReviewed: Boolean = false)
 
-/** Website claims never expand the bundled catalog; completed user approvals are separate local evidence. */
+/** Exact reviewed hosts, completed user approvals, or a substantive practical-content check. */
 internal object JudgeRules {
     private data class ReviewedService(val name: String, val hosts: Set<String>, val identity: Regex, val purpose: Regex)
     private val services = listOf(
@@ -20,7 +21,9 @@ internal object JudgeRules {
             Regex("(?i)\\b(merge|split|compress|convert|edit|sign|organize|ocr)\\b")),
         ReviewedService("Adhoc Safety fire/security services", setOf("adhocsafety.com", "www.adhocsafety.com"),
             Regex("(?i)\\bad\\s*hoc\\b"),
-            Regex("(?i)(fire[ -]?(safety|alarm|fighting|protection|suppression)|security systems|civil defen[cs]e)"))
+            Regex("(?i)(fire[ -]?(safety|alarm|fighting|protection|suppression)|security systems|civil defen[cs]e)")),
+        ReviewedService("Claude AI assistant", setOf("claude.ai"), Regex("(?i)\\b(claude|anthropic)\\b"),
+            Regex("(?i)\\b(ai|assistant|code|writing|research)\\b"))
     )
     val reviewedHosts = services.flatMap { it.hosts }.toSet()
     val reviewedServiceNames = services.map { it.name }
@@ -50,7 +53,8 @@ internal object JudgeRules {
         require(uri.scheme.equals("https", true) && uri.port in setOf(-1, 443) && uri.userInfo == null)
         require(host == DomainRules.normalizeHost(host) && '.' in host && !host.endsWith(".local"))
         require(!host.split('.').all { it.toIntOrNull() != null })
-        URI("https", null, host, -1, uri.path.ifEmpty { "/" }, uri.query, null)
+        // Rebuilding from decoded path/query used to change %2F, %26, and nested URLs.
+        URI("https://$host" + uri.rawPath.orEmpty().ifEmpty { "/" } + uri.rawQuery?.let { "?$it" }.orEmpty())
     }.getOrNull()
 
     fun leisureHost(host: String, extra: Set<String> = emptySet()): Boolean {
@@ -76,10 +80,16 @@ internal object JudgeRules {
             Regex("(?i)(https?[:/]|(?:^|[?&/])(url|redirect|redirect_uri|redirect_url|target|next|continue|dest|destination|return|returnurl|return_url|proxy|embed|watch)(?:[=/]|$))").containsMatchIn(route)
     }.getOrDefault(true)
 
-    fun visibleText(html: String): String {
+    fun readableMarkup(html: String): String {
         var text = html.take(512 * 1024)
         text = text.replace(Regex("<!--[\\s\\S]*?-->"), " ")
         text = text.replace(Regex("(?is)<(script|style|noscript|svg|nav|footer|aside)\\b[^>]*>[\\s\\S]*?</\\1\\s*>"), " ")
+        text = text.replace(Regex("(?is)<([a-z][a-z0-9]*)\\b[^>]*(?:\\shidden(?:\\s|=|>)|aria-hidden\\s*=\\s*['\"]true['\"]|style\\s*=\\s*['\"][^'\"]*(?:display\\s*:\\s*none|visibility\\s*:\\s*hidden))[^>]*>[\\s\\S]*?</\\1\\s*>"), " ")
+        return text
+    }
+
+    fun visibleText(html: String): String {
+        var text = readableMarkup(html)
         text = text.replace(Regex("<[^>]*>"), " ")
         text = text.replace(Regex("&#(?:x([0-9a-fA-F]+)|([0-9]+));")) {
             val n = it.groupValues[1].takeIf(String::isNotEmpty)?.toIntOrNull(16)
@@ -99,23 +109,41 @@ internal object JudgeRules {
             .mapNotNull { runCatching { webUri(uri.resolve(it.groupValues[1].replace("&amp;", "&")).toString())?.host }.getOrNull() }
             .any { leisureHost(it) }
         val text = visibleText(html)
-        if (text.length < 120 || challenge.containsMatchIn(text))
+        val heading = Regex("(?is)<(?:title|h1)\\b[^>]*>(.*?)</(?:title|h1)>").findAll(readableMarkup(html))
+            .joinToString(" ") { visibleText(it.groupValues[1]) }
+        if (text.length < 120 || challenge.containsMatchIn(heading) ||
+            text.length < 500 && challenge.find(text)?.range?.first?.let { it < 80 } == true)
             return Judgement(JudgeDecision.UNVERIFIED, "The page could not be read reliably. The normal delay still applies.")
-        if (leisureWords.containsMatchIn(text))
-            return Judgement(JudgeDecision.DELAY, "The page contains leisure or mixed-purpose content. The normal delay still applies.")
+        // Technical event/data streaming is not entertainment streaming. Personal words still apply unchanged.
+        val leisureText = text.replace(Regex("(?i)\\b(data streaming|event streaming|streaming (data|api|events?))\\b"), "technical processing")
+        val leisureMatch = leisureWords.find(leisureText)
+        if (leisureMatch != null)
+            return Judgement(JudgeDecision.DELAY, "The readable page contains '${leisureMatch.value}', indicating leisure or mixed-purpose content. The normal delay still applies.")
         preferences.veto(address, text)?.let { return Judgement(JudgeDecision.DELAY, it) }
         val service = services.firstOrNull { uri.host in it.hosts }
-        if (service == null && uri.host in preferences.learnedHosts && !preferences.recognizesUsefulContent(uri.host, text))
+        val learned = preferences.recognizesUsefulContent(uri.host, text)
+        val category = if (service == null && !learned) JudgeContent.classify(uri.host, html) else null
+        if (service == null && uri.host in preferences.learnedHosts && !learned && category == null)
             return Judgement(JudgeDecision.UNVERIFIED, "This host has a completed whitelist approval, but the readable page does not confirm its identity and practical purpose. Its ordinary whitelist permission is unchanged.")
-        if (service == null && !preferences.recognizesUsefulContent(uri.host, text))
-            return Judgement(JudgeDecision.UNVERIFIED, "Page inspected, but this domain is not independently reviewed. Its text alone cannot authorize immediate access.")
+        if (service == null && !learned && category == null)
+            return Judgement(JudgeDecision.UNVERIFIED, "The page does not provide enough matching site identity and practical-purpose evidence. A title or a few useful keywords are insufficient. The normal delay still applies.")
         val identity = service?.identity?.containsMatchIn(text) ?: true
         val purpose = service?.purpose?.containsMatchIn(text) ?: true
         if (!identity || !purpose)
             return Judgement(JudgeDecision.UNVERIFIED, "This page does not confirm ${service?.name}. The normal delay still applies.")
         val links = if (leisureLinks) " Links to leisure platforms were found; those destinations remain blocked." else ""
-        val evidence = service?.let { "Reviewed ${it.name}" } ?: "Completed whole-site approval in your whitelist"
-        return Judgement(JudgeDecision.IMMEDIATE, "$evidence; readable content confirms a practical purpose.$links", uri.toASCIIString(), setOf(uri.host), preferences.revision)
+        val evidence = service?.let { "Reviewed ${it.name}" } ?: category?.let { "Site identity and substantive $it content verified" }
+            ?: "Completed whole-site approval in your whitelist"
+        return Judgement(JudgeDecision.IMMEDIATE, "$evidence; readable content confirms a practical purpose.$links", uri.toASCIIString(), setOf(uri.host), preferences.revision,
+            contentReviewed = category != null)
+    }
+
+    /** Fixed official authentication endpoint: don't consume a one-time link just to read its HTML. */
+    fun knownSignIn(address: String, preferences: JudgePreferences): Judgement? {
+        val uri = webUri(address) ?: return null
+        if (uri.host != "claude.ai" || uri.rawPath != "/magic-link" || unsafeRoute(address) || preferences.veto(address) != null) return null
+        return Judgement(JudgeDecision.IMMEDIATE, "Recognized Claude sign-in on its exact official host. The one-time sign-in link was not fetched.",
+            address, setOf(uri.host), preferences.revision)
     }
 
     /** Persisted entries are never trusted as arbitrary website approvals. */

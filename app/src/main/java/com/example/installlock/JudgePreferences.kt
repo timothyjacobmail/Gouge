@@ -71,8 +71,7 @@ internal data class JudgePreferences(
 
     fun recognizesUsefulContent(host: String, text: String): Boolean {
         if (host !in learnedHosts) return false
-        val brands = host.split('.').dropLast(1).flatMap { it.split('-') }.filter { it.length >= 3 && it !in genericLabels }
-        if (brands.none { Regex("(?i)\\b${Regex.escape(it)}\\b").containsMatchIn(text) }) return false
+        if (!JudgeContent.identity(host, text)) return false
         val practical = setOf("document", "documents", "pdf", "convert", "compress", "documentation", "developer",
             "software", "code", "programming", "engineering", "technical", "installation", "troubleshooting",
             "support", "account", "payment", "application", "registration", "license", "licence", "government",
@@ -80,7 +79,14 @@ internal data class JudgePreferences(
         return KeywordMatcher(practical).findMatches(text).size >= 2
     }
 
-    fun refreshCandidates(saved: Set<String>): Set<String> = saved.filter {
-        it in eligibleHosts && veto("https://$it/") == null
+    fun refreshCandidates(saved: Set<String>, contentHosts: Set<String> = emptySet()): Set<String> = saved.filter {
+        (it in eligibleHosts || it in contentHosts) && veto("https://$it/") == null
     }.toSet()
+
+    fun accepts(judgement: Judgement): Boolean {
+        if (judgement.decision != JudgeDecision.IMMEDIATE || judgement.policyRevision != revision) return false
+        val uri = JudgeRules.webUri(judgement.address) ?: return false
+        if (judgement.hosts != setOf(uri.host) || JudgeRules.unsafeRoute(judgement.address) || veto(judgement.address) != null) return false
+        return uri.host in eligibleHosts || judgement.contentReviewed
+    }
 }

@@ -32,6 +32,12 @@ internal object SharedSite {
     /** Temporary page approvals retain the full link, including content-identifying queries. */
     fun temporaryLink(text: String?): String? = directWebsite(text)?.toASCIIString()?.let(TemporaryLinkRules::normalize)
 
+    /** Keep a shared sign-in link only in memory, and only while the original narrow choice is unchanged. */
+    fun judgeAddress(text: String?, selected: String): String {
+        val original = directWebsite(text)?.toASCIIString() ?: return selected
+        return if (whitelistOptions(original).firstOrNull() == selected) original else selected
+    }
+
     /** Narrowest path first, then parent directories and the whole domain. Never share URL tokens. */
     fun whitelistOptions(text: String?): List<String> {
         var uri = directWebsite(text) ?: uriFromText(text) ?: return emptyList()
@@ -59,9 +65,10 @@ internal object SharedSite {
     }
 
     private fun directWebsite(text: String?): URI? {
-        uriFromText(text)?.takeIf { !GoogleShareResolver.isWrapper(it) }?.let { return it }
-        return webUrl.findAll(text.orEmpty()).mapNotNull { uriFromText(it.value) }
-            .firstOrNull { !GoogleShareResolver.isWrapper(it) }
+        fun destination(uri: URI): URI? = if (GoogleShareResolver.isWrapper(uri))
+            GoogleShareResolver.resolveLocally(uri.toASCIIString())?.let(::uriFromText) else uri
+        uriFromText(text)?.let(::destination)?.let { return it }
+        return webUrl.findAll(text.orEmpty()).mapNotNull { uriFromText(it.value)?.let(::destination) }.firstOrNull()
     }
 
     fun shortLinkFromText(text: String?): String? {

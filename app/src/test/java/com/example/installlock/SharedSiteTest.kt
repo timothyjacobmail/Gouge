@@ -6,6 +6,15 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class SharedSiteTest {
+    @Test fun embeddedGoogleSignInDestinationSkipsTheShortLinkSpinnerAndKeepsSecretsOutOfChoices() {
+        val wrapper = "https://www.google.com/url?q=https://claude.ai/magic-link%23synthetic-token%3D&source=gmail"
+        assertNull(SharedSite.shortLinkFromText(wrapper))
+        assertEquals(listOf("claude.ai/magic-link", "claude.ai"), SharedSite.whitelistOptions(wrapper))
+        assertEquals("https://claude.ai/magic-link#synthetic-token=", SharedSite.judgeAddress(wrapper, "claude.ai/magic-link"))
+        assertEquals("claude.ai", SharedSite.judgeAddress(wrapper, "claude.ai"))
+        assertEquals("edited.example", SharedSite.judgeAddress(wrapper, "edited.example"))
+    }
+
     @Test
     fun sharesOnlyTheDomainRatherThanTheWholePage() {
         assertEquals("example.com", SharedSite.domainFromText("https://www.Example.com/path?token=secret#section"))

@@ -7,10 +7,14 @@ import java.net.URLDecoder
 import java.util.Locale
 
 /** Follow Google's sharing redirects without opening the destination page or saving the shared link. */
-internal class GoogleShareResolver(private val fetch: (URI) -> Response = ::download) {
+internal class GoogleShareResolver(private val timeoutMillis: Long = 6_000,
+                                  private val fetch: (URI) -> Response = ::download) {
     data class Response(val status: Int, val location: String? = null, val html: String = "")
 
-    fun resolve(input: String): String? {
+    fun resolve(input: String): String? = resolveLocally(input)
+        ?: BoundedWebCheck.run(timeoutMillis) { resolveOnline(input) }
+
+    private fun resolveOnline(input: String): String? {
         var current = webUri(input) ?: return null
         val visited = mutableSetOf<String>()
         val deadline = System.nanoTime() + 20_000_000_000L
@@ -33,6 +37,18 @@ internal class GoogleShareResolver(private val fetch: (URI) -> Response = ::down
     }
 
     companion object {
+        /** Embedded /url targets need no network, worker queue, or loading screen. Keeps sign-in fragments intact. */
+        fun resolveLocally(input: String): String? {
+            var current = webUri(input) ?: return null
+            val visited = mutableSetOf<String>()
+            repeat(8) {
+                if (!isWrapper(current)) return current.toASCIIString()
+                if (!visited.add(current.toString())) return null
+                current = embeddedTarget(current)?.let(::webUri) ?: return null
+            }
+            return current.takeUnless(::isWrapper)?.toASCIIString()
+        }
+
         fun isWrapper(uri: URI): Boolean {
             val host = uri.host?.lowercase(Locale.ROOT)?.trimEnd('.') ?: return false
             return host == "share.google" || host == "search.app" ||
@@ -54,8 +70,9 @@ internal class GoogleShareResolver(private val fetch: (URI) -> Response = ::down
                 if (name !in setOf("url", "q") || '=' !in item) null else try {
                     name to URLDecoder.decode(item.substringAfter('='), "UTF-8")
                 } catch (_: Exception) { null }
-            }.toMap()
-            return listOfNotNull(parameters["url"], parameters["q"]).firstOrNull { webUri(it) != null }
+            }.map { it.second }.filter { webUri(it) != null }.distinct()
+            // Conflicting targets must not be resolved differently by different components.
+            return parameters.singleOrNull()
         }
 
         private fun metadataTarget(html: String): String? {
@@ -96,8 +113,8 @@ internal class GoogleShareResolver(private val fetch: (URI) -> Response = ::down
             try {
                 connection.instanceFollowRedirects = false
                 connection.requestMethod = "GET"
-                connection.connectTimeout = 5_000
-                connection.readTimeout = 5_000
+                connection.connectTimeout = 2_000
+                connection.readTimeout = 2_000
                 connection.setRequestProperty("User-Agent", "Mozilla/5.0")
                 val status = connection.responseCode
                 val location = connection.getHeaderField("Location")

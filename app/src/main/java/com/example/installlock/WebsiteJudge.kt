@@ -9,12 +9,30 @@ import java.util.Locale
 /** Fetches inert public HTML: no JavaScript, cookies, credentials, forms or WebView. */
 internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
                             private val leisureCatalog: Set<String> = emptySet(),
-                            private val preferences: JudgePreferences = JudgePreferences()) {
+                            private val preferences: JudgePreferences = JudgePreferences(),
+                            private val timeoutMillis: Long = 10_000) {
     data class Page(val status: Int, val html: String = "", val redirect: String? = null)
 
-    fun judge(input: String): Judgement {
-        var current = JudgeRules.webUri(input)
+    fun judge(input: String): Judgement = BoundedWebCheck.run(timeoutMillis) { inspect(input) }
+        ?: Judgement(JudgeDecision.UNVERIFIED, "The check timed out or could not finish. No approval was added. Try the site's public home page or use the normal delay.")
+
+    private fun inspect(input: String): Judgement {
+        val raw = runCatching { URI(input.trim()) }.getOrNull()
+        val target = if (raw != null && GoogleShareResolver.isWrapper(raw)) GoogleShareResolver().resolve(input)
+            ?: return Judgement(JudgeDecision.UNVERIFIED, "The Google link could not be resolved. Paste the destination website instead.")
+            else input
+        val original = JudgeRules.webUri(target)
             ?: return Judgement(JudgeDecision.UNVERIFIED, "Enter a public HTTPS website on its normal port.")
+        if (JudgeRules.leisureHost(original.host, leisureCatalog))
+            return Judgement(JudgeDecision.DELAY, "This leisure site keeps the normal whitelist delay.")
+        if (JudgeRules.unsafeRoute(original.toASCIIString()))
+            return Judgement(JudgeDecision.DELAY, "This leisure or unchecked redirect route keeps the normal delay.")
+        preferences.veto(original.toASCIIString())?.let { return Judgement(JudgeDecision.DELAY, it) }
+        // Fragments and one-time authentication parameters stay in memory for opening only.
+        // Never send an authentication link to the classifier, including via redirect Location.
+        val openAddress = runCatching { URI(if (target.contains("://")) target.trim() else "https://${target.trim()}").toASCIIString() }.getOrDefault("")
+        JudgeRules.knownSignIn(openAddress, preferences)?.let { return it }
+        var current = if (sensitive(original, target)) URI("https://${original.host}/") else original
         val visited = linkedSetOf<String>()
         val deadline = System.nanoTime() + 30_000_000_000L
         repeat(5) {
@@ -28,13 +46,16 @@ internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
             }
             when {
                 page.status in setOf(301, 302, 303, 307, 308) -> {
-                    current = runCatching { JudgeRules.webUri(current.resolve(page.redirect ?: error("Missing redirect")).toString()) }.getOrNull()
+                    val destination = runCatching { current.resolve(page.redirect ?: error("Missing redirect")).toString() }.getOrNull()
+                    current = destination?.let { JudgeRules.webUri(it) }
                         ?: return Judgement(JudgeDecision.UNVERIFIED, "The redirect destination is not eligible for immediate access.")
+                    if (sensitive(current, destination)) return Judgement(JudgeDecision.UNVERIFIED, "This destination requires sign-in. Judge did not follow its authentication link. Try its public home page.")
                 }
                 page.status == 200 -> {
                     val decision = JudgeRules.inspect(current.toASCIIString(), page.html, preferences)
                     // Only grant the final inspected host, never a shortener or intermediate host.
-                    return decision
+                    return if (decision.decision == JudgeDecision.IMMEDIATE && current.host == original.host)
+                        decision.copy(address = openAddress) else decision
                 }
                 else -> return Judgement(JudgeDecision.UNVERIFIED, "The website returned HTTP ${page.status}. Its delay is unchanged.")
             }
@@ -43,6 +64,13 @@ internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
     }
 
     companion object {
+        private fun sensitive(uri: URI, original: String): Boolean =
+            '#' in original || Regex("(?i)(?:^|/)(magic-link|login|signin|sign-in|oauth|callback|verify|reset-password)(?:/|$)").containsMatchIn(uri.path) ||
+                uri.rawQuery.orEmpty().split('&').any {
+                    val key = runCatching { java.net.URLDecoder.decode(it.substringBefore('='), "UTF-8") }.getOrDefault("")
+                    Regex("(?i)(.*token.*|code|state|ticket|password|email|otp|signature)").matches(key)
+                }
+
         internal fun publicAddress(address: InetAddress): Boolean {
             if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress ||
                 address.isSiteLocalAddress || address.isMulticastAddress) return false
@@ -61,8 +89,8 @@ internal class WebsiteJudge(private val fetch: (URI) -> Page = ::download,
             val connection = uri.toURL().openConnection() as HttpURLConnection
             try {
                 connection.instanceFollowRedirects = false
-                connection.connectTimeout = 8_000
-                connection.readTimeout = 8_000
+                connection.connectTimeout = 3_000
+                connection.readTimeout = 3_000
                 connection.setRequestProperty("User-Agent", "InstallLock-Judge/1.0")
                 connection.setRequestProperty("Accept", "text/html,application/xhtml+xml")
                 connection.setRequestProperty("Accept-Encoding", "identity")

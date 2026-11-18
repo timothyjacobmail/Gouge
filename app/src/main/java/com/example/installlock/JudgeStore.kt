@@ -25,7 +25,12 @@ internal object JudgeStore {
                 revision
             }))
     }
-    fun eligible(c: Context) = snapshot(c).eligibleHosts
+    private fun contentHosts(c: Context): Set<String> = saved(c).filter { prefs(c).getBoolean("content.$it", false) }.toSet()
+    fun eligible(c: Context): Set<String> = snapshot(c).let { policy ->
+        policy.eligibleHosts + contentHosts(c).filter {
+            prefs(c).getString("policy.$it", null) == policy.revision && policy.veto("https://$it/") == null
+        }
+    }
     /** Recheck only previously approved Judge hosts, keeping stale grants inactive. */
     @Synchronized fun refreshStale(context: Context) {
         if (refreshing || !Policy.isOwner(context) || !Store.chromeLock(context) || !BrowserKeywordService.isReady(context)) return
@@ -34,7 +39,7 @@ internal object JudgeStore {
         val p = prefs(c)
         attempts.keys.retainAll(saved(c))
         val now = SystemClock.elapsedRealtime()
-        val candidates = policy.refreshCandidates(saved(c)).filter { host ->
+        val candidates = policy.refreshCandidates(saved(c), contentHosts(c)).filter { host ->
             p.getString("policy.$host", null) != policy.revision &&
                 attempts[host]?.let { (revision, time) -> revision != policy.revision || now - time >= 5 * 60_000L } != false
         }.take(4)
@@ -60,7 +65,7 @@ internal object JudgeStore {
     fun active(c: Context): Set<String> = if (!BrowserKeywordService.isReady(c)) emptySet()
         else snapshot(c).let { policy ->
             JudgeRules.activeHosts(saved(c).filter { prefs(c).getString("policy.$it", null) == policy.revision }.toSet(),
-                policy.extraLocks, policy.domainRules, policy.eligibleHosts)
+                policy.extraLocks, policy.domainRules, eligible(c))
                 .filter { policy.veto("https://$it/") == null }.toSet()
         }
 
@@ -68,7 +73,10 @@ internal object JudgeStore {
         if (requireExisting && judgement.hosts.any { it !in saved(c) }) return false
         if (rejectionReason(c, judgement) != null) return false
         return prefs(c).edit().putStringSet("hosts", saved(c) + judgement.hosts).apply {
-            judgement.hosts.forEach { putString("policy.$it", judgement.policyRevision) }
+            judgement.hosts.forEach {
+                putString("policy.$it", judgement.policyRevision)
+                putBoolean("content.$it", judgement.contentReviewed)
+            }
         }.commit()
     }
 
@@ -80,13 +88,12 @@ internal object JudgeStore {
         if (!BrowserKeywordService.isEnabled(c)) return "Enable Gouge's browser accessibility service before granting immediate access."
         if (!BrowserKeywordService.isReady(c)) return "Browser monitoring is not ready. Finish banking mode if active, then reconnect Gouge's browser accessibility service."
         judgement.hosts.forEach { policy.veto("https://$it/")?.let { reason -> return reason } }
-        val allowed = JudgeRules.activeHosts(judgement.hosts, policy.extraLocks, policy.domainRules, policy.eligibleHosts)
-        if (allowed != judgement.hosts) return "An extra site lock, ordered Block rule, or the reviewed-domain policy prevents this grant."
+        if (!policy.accepts(judgement)) return "This decision does not contain a current exact-host approval with sufficient evidence. Check the website again."
         return null
     }
 
     @Synchronized fun remove(c: Context, host: String) {
-        prefs(c).edit().putStringSet("hosts", saved(c) - host).remove("policy.$host").commit()
+        prefs(c).edit().putStringSet("hosts", saved(c) - host).remove("policy.$host").remove("content.$host").commit()
         Policy.syncChrome(c)
     }
 }

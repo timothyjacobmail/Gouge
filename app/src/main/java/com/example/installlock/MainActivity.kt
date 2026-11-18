@@ -1113,11 +1113,18 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
     }
 
     private fun showResolveSharedSite(shortLink: String) {
+        GoogleShareResolver.resolveLocally(shortLink)?.let { resolved ->
+            sharedSiteText = resolved
+            sharedSiteOptions = SharedSite.whitelistOptions(resolved)
+            showAddSite(sharedSiteOptions.firstOrNull().orEmpty(), sharedSiteOptions,
+                "Decoded Google's destination on this phone without a network request. Review the address below.")
+            return
+        }
         val status = label("Finding the original website behind Google's shortened link…")
         val fallback = sharedSiteOptions.toList()
         screen(
             label("Add to Chrome whitelist", 22f), status, ProgressBar(this),
-            label("This checks the Google sharing link online. The destination page is not opened and nothing is added automatically."),
+            label("This checks only the Google sharing link, for up to 6 seconds. The destination page is not opened and nothing is added automatically."),
             button(if (fallback.isEmpty()) "Enter the original address manually" else "Use the website shown in the shared text") {
                 shareLinkTask?.cancel(true)
                 swapTo { showAddSite(fallback.firstOrNull().orEmpty(), fallback,
@@ -1130,7 +1137,7 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
             val resolvedOptions = resolved?.let { SharedSite.whitelistOptions(it) }.orEmpty()
             runOnUiThread {
                 // Don't replace a newer share, an edited form, or a password screen after backgrounding.
-                if (!isFinishing && !isDestroyed && status.isAttachedToWindow && hasWindowFocus()) {
+                if (!isFinishing && !isDestroyed && statusUpdatesActive && status.isAttachedToWindow) {
                     val options = resolvedOptions.ifEmpty { fallback }
                     val notice = when {
                         resolvedOptions.isNotEmpty() -> "Resolved Google's short link to the original website. Review the address below."
@@ -1273,7 +1280,8 @@ If your right eye causes you to stumble, gouge it out and throw it away. It is b
                 if (JudgeRules.webUri(selected) == null) {
                     msg.text = "Judge needs a public HTTPS website on its normal port. You can still use the delayed whitelist for other supported addresses."
                 } else {
-                    startActivity(JudgeActivity.openIntent(this, selected))
+                    val input = if (selected == initialSite) SharedSite.judgeAddress(sharedSiteText, selected) else selected
+                    startActivity(JudgeActivity.openIntent(this, input))
                 }
             },
             button(if (choices != null) "Add selected address" else "Add") {
