@@ -125,7 +125,7 @@ class BrowserKeywordService : AccessibilityService() {
         // Some Android versions hide suspended handlers from intent queries. Keep their targets
         // registered before the guard releases them as this service reconnects.
         RedditStore.discover(this)
-        targets = BrowserPackages.keywordTargets(this) + (Store.keywordGuardPackages(this) - ShortFormFeeds.nativePackages - RedditStore.trackedClients(this))
+        targets = BrowserPackages.keywordTargets(this) + (BrowserHandlerRules.rememberedBrowsers(Store.keywordGuardPackages(this)) - ShortFormFeeds.nativePackages - RedditStore.trackedClients(this))
         updateEventPackages()
     }
 

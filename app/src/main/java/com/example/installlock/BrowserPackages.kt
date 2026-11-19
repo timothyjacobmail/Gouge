@@ -20,7 +20,8 @@ internal object BrowserPackages {
         val handlers = pm.queryIntentActivities(probe, flags or PackageManager.GET_RESOLVED_FILTER)
             .filter { it.filter?.let { filter ->
                 filter.hasDataScheme("https") && filter.countDataAuthorities() == 0
-            } == true }.map { it.activityInfo.packageName }
+            } == true && BrowserHandlerRules.isBrowserHandler(it.activityInfo.packageName, it.activityInfo.name) }
+            .map { it.activityInfo.packageName }
         val browserApps = pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER), flags
         ).map { it.activityInfo.packageName }

@@ -132,7 +132,7 @@ object Policy {
         val keywordFilterOn = Store.browserKeywordFilterEnabled(c)
         val domainRulesOn = Store.domainRules(c).isNotEmpty()
         val keywordBrowsers = if (!BrowserKeywordService.isReady(c))
-            monitoredTargets + (previousKeywordGuard - RedditStore.trackedClients(c)) else emptySet()
+            monitoredTargets + (BrowserHandlerRules.rememberedBrowsers(previousKeywordGuard) - RedditStore.trackedClients(c)) else emptySet()
         val keywordReleaseRetries = mutableSetOf<String>()
         val googleVpnMissing = !DnsFilterService.isReady(c)
         val neverRules = Store.neverInstall(c)
@@ -272,6 +272,7 @@ object Policy {
         val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
             .addCategory(Intent.CATEGORY_BROWSABLE)
         return c.packageManager.queryIntentActivities(probe, PackageManager.MATCH_ALL)
+            .filter { BrowserHandlerRules.isBrowserHandler(it.activityInfo.packageName, it.activityInfo.name) }
             .map { it.activityInfo.packageName }
             .filter { it != c.packageName && it !in KEEP && it !in ALLOWED_BROWSERS }
             .toSet()
