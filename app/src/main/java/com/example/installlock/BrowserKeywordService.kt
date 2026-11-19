@@ -18,8 +18,6 @@ import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
-import com.example.delayedsecrect.SecretClipboard
-import com.example.delayedsecrect.ClipboardCleanupActivity
 import com.example.delayedsecrect.PasswordFieldEntry
 import com.example.delayedsecrect.PasswordEntryResult
 
@@ -109,9 +107,6 @@ class BrowserKeywordService : AccessibilityService() {
         connections.connect(this)
         EnforcementRecovery.recover(this)
         PasswordFieldEntry.attach(::enterFocusedPassword)
-        SecretClipboard.attachAccessibility(this, ::updateEventPackages) {
-            startActivity(ClipboardCleanupActivity.openIntent(this))
-        }
         categoryWatchdog.start()
         rapidScrollWatchdog.start()
         redditMonitor.start()
@@ -179,9 +174,6 @@ class BrowserKeywordService : AccessibilityService() {
             playStoreMonitor.check(focusChanged = true)
         }
         if (event != null) redditMonitor.onEvent(event)
-        try { SecretClipboard.onAccessibilityEvent(event) } catch (_: RuntimeException) {
-            // A transient clipboard or accessibility error must not interrupt browser enforcement.
-        }
         if (event != null) try { rapidScrollWatchdog.onScroll(event) } catch (_: RuntimeException) {
             // Navigation can invalidate a scroll event's source while it is being inspected.
         }
@@ -563,7 +555,6 @@ class BrowserKeywordService : AccessibilityService() {
         if (instance === this) instance = null
         if (connections.disconnect(this)) {
             PasswordFieldEntry.detach()
-            SecretClipboard.detachAccessibility()
         }
         onInterrupt()
         BackgroundPowerGuardService.enforcePlayStoreFallback()
@@ -577,7 +568,6 @@ class BrowserKeywordService : AccessibilityService() {
         if (instance === this) instance = null
         if (connections.disconnect(this)) {
             PasswordFieldEntry.detach()
-            SecretClipboard.detachAccessibility()
         }
         onInterrupt()
         BackgroundPowerGuardService.enforcePlayStoreFallback()

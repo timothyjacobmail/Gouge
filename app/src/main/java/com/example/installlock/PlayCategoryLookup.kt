@@ -4,13 +4,14 @@ import android.content.Context
 import android.content.pm.PackageInfo
 import android.os.Handler
 import android.os.Looper
-import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.GZIPInputStream
+import android.net.TrafficStats
 
 /** Shared listing metadata for install waits and banking discovery; network work stays off policy/UI threads. */
 internal object PlayCategoryLookup {
@@ -26,9 +27,7 @@ internal object PlayCategoryLookup {
     private val generation = AtomicLong()
     fun revision(): Long = generation.get()
     private val handler = Handler(Looper.getMainLooper())
-    private const val RETRY_MS = 60_000L
-    private const val REFRESH_MS = 24 * 60 * 60_000L
-    private const val MAX_PAGE_BYTES = 4 * 1024 * 1024
+    internal const val TRAFFIC_TAG = 0x475043
 
     fun exemption(context: Context, pkg: PackageInfo,
                   selected: Set<String> = Store.immediatePlayCategories(context)): PlayInstallCategory? {
@@ -45,9 +44,12 @@ internal object PlayCategoryLookup {
                  notifyPolicy: Boolean = false): PlayInstallCategory? {
         val c = context.applicationContext
         val prefs = c.getSharedPreferences("play_categories", Context.MODE_PRIVATE)
-        val record = PlayCategoryRecord.decode(prefs.getString(pkg.packageName, null))
+        val before = PlayCategoryRecord.decode(prefs.getString(pkg.packageName, null))
             ?.takeIf { it.matches(pkg.firstInstallTime, pkg.lastUpdateTime) }
-        if (record == null || System.currentTimeMillis() >= record.retryAt) {
+        val record = before?.let { PlayLookupPolicy.migrate(it,System.currentTimeMillis()) }
+        if (record != before) prefs.edit().putString(pkg.packageName,record!!.encode()).apply()
+        if (PlayLookupPolicy.due(record,System.currentTimeMillis()) && PlayLookupNetwork.connected(c,background) &&
+            PlayLookupNetwork.available(c,background)) {
             synchronized(pending) {
                 val priority = if (background) 1 else 0
                 val existing = pending[pkg.packageName]
@@ -59,15 +61,16 @@ internal object PlayCategoryLookup {
                         executor.execute(existing)
                     }
                 } else {
-                    val request = Request(priority, sequence.getAndIncrement()) { request ->
+                    val request = Request(priority, sequence.getAndIncrement()) work@{ request ->
                         try {
-                            val category = fetchCategory(pkg.packageName)
+                            // Recheck at execution: queued bulk scans must not outlive their network allowance.
+                            if (!PlayLookupNetwork.connected(c,request.priority > 0)) return@work
+                            val result = fetchCategory(c,pkg.packageName,request.priority > 0) ?: return@work
                             val current = c.packageManager.getPackageInfo(pkg.packageName, 0)
                             // An uninstall/reinstall/update while the request was in flight invalidates it.
                             if (current.firstInstallTime == pkg.firstInstallTime && current.lastUpdateTime == pkg.lastUpdateTime) {
-                                prefs.edit().putString(pkg.packageName, PlayCategoryRecord(pkg.firstInstallTime,
-                                    pkg.lastUpdateTime, category ?: record?.category.orEmpty(), System.currentTimeMillis() +
-                                            if (category == null) RETRY_MS else REFRESH_MS).encode()).apply()
+                                prefs.edit().putString(pkg.packageName, PlayLookupPolicy.completed(pkg.firstInstallTime,
+                                    pkg.lastUpdateTime,record,result.category,System.currentTimeMillis(),result.unavailable).encode()).commit()
                                 generation.incrementAndGet()
                                 // Bulk banking results do not each trigger an unrelated full policy sweep.
                                 if (request.notifyPolicy) handler.post { Policy.sweep(c) }
@@ -89,40 +92,49 @@ internal object PlayCategoryLookup {
         try { c.packageManager.getInstallSourceInfo(packageName).installingPackageName }
         catch (_: Exception) { null }
 
-    private fun fetchCategory(packageName: String): String? {
+    private data class FetchResult(val category: String? = null, val unavailable: Boolean = false)
+    private fun fetchCategory(c: Context, packageName: String, background: Boolean): FetchResult? {
         // Package names are the only information sent. No account, device ID or usage data is sent.
         if (!Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+").matches(packageName)) return null
-        // Let Google use the device's network region first; a US-only lookup can miss local banks.
+        // Try the device region first. Only a missing regional listing warrants one US fallback;
+        // network/parse failures must not double every request.
         for (region in listOf("", "&gl=US")) {
-            fetchListingCategory(packageName, region)?.let { return it }
+            val result=fetchListingCategory(c,packageName,region,background) ?: return null
+            if (!result.unavailable || region.isNotEmpty()) return result
         }
-        return null
+        return FetchResult(unavailable=true)
     }
 
-    private fun fetchListingCategory(packageName: String, region: String): String? {
+    private fun fetchListingCategory(c: Context, packageName: String, region: String, background: Boolean): FetchResult? {
+        val reservation=PlayLookupNetwork.reserve(c,background) ?: return null
         var connection: HttpURLConnection? = null
+        var received=0L
+        val previousTag=TrafficStats.getThreadStatsTag()
+        var input: java.io.InputStream? = null
         return try {
+            TrafficStats.setThreadStatsTag(TRAFFIC_TAG)
             connection = URL("https://play.google.com/store/apps/details?id=$packageName&hl=en$region")
                 .openConnection() as HttpURLConnection
             connection.connectTimeout = 8_000
             connection.readTimeout = 8_000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-            val bytes = connection.inputStream.use { stream ->
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(8192)
-                while (output.size() <= MAX_PAGE_BYTES) {
-                    val read = stream.read(buffer, 0, minOf(buffer.size, MAX_PAGE_BYTES + 1 - output.size()))
-                    if (read < 0) break
-                    output.write(buffer, 0, read)
-                }
-                output.toByteArray()
-            }
-            if (bytes.size > MAX_PAGE_BYTES) return null
-            PlayStoreListing.category(bytes.toString(Charsets.UTF_8), packageName)
+            connection.setRequestProperty("Accept-Encoding","gzip")
+            val status=connection.responseCode
+            if (status != HttpURLConnection.HTTP_OK) return FetchResult(unavailable=status in setOf(404,410))
+            val wire=LimitedNetworkInput(connection.inputStream,reservation.limit) { received+=it }
+            input=if (connection.contentEncoding.equals("gzip",true)) GZIPInputStream(wire) else wire
+            val category=PlayListingReader.category(input) { html -> PlayStoreListing.category(html,packageName) }
+            FetchResult(category)
         } catch (_: Exception) {
-            null
-        } finally { connection?.disconnect() }
+            FetchResult()
+        } finally {
+            // Disconnect before closing an incomplete body: HTTP keep-alive cleanup must not
+            // silently drain the rest of the listing after we have found the metadata.
+            connection?.disconnect()
+            try { input?.close() } catch (_: Exception) {}
+            TrafficStats.setThreadStatsTag(previousTag)
+            PlayLookupNetwork.received(c,received,reservation)
+        }
     }
 }

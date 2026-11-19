@@ -398,7 +398,7 @@ class MainActivity : AppCompatActivity() {
         fun refreshStatus() {
             val discovery = BankingCategoryDiscovery.snapshot()
             categoryStatus.text = "Finance apps detected: ${discovery.finance.size}. " +
-                "Play categories verified: ${discovery.verified}/${discovery.total}. Initial checks need internet."
+                "Play categories verified: ${discovery.verified}/${discovery.total}. Automatic checks use unmetered internet, reuse verified app versions and back off after failures."
             apps.forEachIndexed { index, app ->
                 val box = choices[index]
                 val detected = financeDetection.isChecked && app.packageName in discovery.finance

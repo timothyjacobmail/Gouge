@@ -12,7 +12,7 @@ The connected Vivo phone's exit history on 2026-10-27 contained both low-memory 
 - Manifest package-change receivers can wake an exempt device owner after installs or removals. They are an additional path; modern Android restricts implicit package broadcasts in other circumstances, so they do not replace the alarm and job.
 - Boot and app-update receivers arm recovery before attempting the service. Locked boot only arms recovery and does not read credential-protected settings or passwords. Full enforcement starts after unlock. Granting exact-alarm access also refreshes scheduling.
 - Reconnecting the accessibility service or the always-on VPN restarts enforcement without requiring the dashboard.
-- A runtime exception during a protection check is logged and retried rather than permanently stopping the repeating check loop. New installs are checked before optional clipboard and scheduled-task maintenance.
+- A runtime exception during a protection check is logged and retried rather than permanently stopping the repeating check loop. New installs are checked before optional scheduled-task maintenance.
 - Service startup refreshes device-owner protection, retaining every app configured in the prevent-uninstall list rather than replacing that list with only Gouge.
 
 All restart paths are conditional on Gouge actually being the device owner. Scheduled recovery does not grant app access or alter saved passwords, install delays, browser restrictions, or unlock windows.

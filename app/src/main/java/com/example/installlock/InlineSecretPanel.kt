@@ -17,7 +17,7 @@ import com.example.delayedsecrect.InlineSecretClaim
 import com.example.delayedsecrect.InlineSecrets
 import com.example.delayedsecrect.RevealState
 import com.example.delayedsecrect.CLAIM_WINDOW_MS
-import com.example.delayedsecrect.SecretClipboard
+import com.example.delayedsecrect.copySecretToClipboard
 import com.example.delayedsecrect.OverlayService
 
 /** Keeps the originating form alive. No secret or claim is saved in view/activity state. */
@@ -51,7 +51,8 @@ internal class InlineSecretPanel(
     }
     private val unlockButton = UiStyle.button(host, "Unlock", primary = true) { performUnlock() }
     private val copy = UiStyle.button(host, "Copy password") { claim()?.let { revealed ->
-        SecretClipboard.copyWithOptions(host, revealed.value) { message.text = it }
+        copySecretToClipboard(host, revealed.value)
+        message.text = "Password copied."
         refresh()
     } }
     private val floating = UiStyle.button(host, "Floating password — enter in another app") {

@@ -78,19 +78,22 @@ internal object PlayCategoryRules {
 
 /** A result applies only to the exact installation/version that was checked. */
 internal data class PlayCategoryRecord(
-    val installedAt: Long, val updatedAt: Long, val category: String, val retryAt: Long
+    val installedAt: Long, val updatedAt: Long, val category: String, val retryAt: Long,
+    val failures: Int = 0, val legacy: Boolean = false
 ) {
     fun matches(firstInstallTime: Long, lastUpdateTime: Long) =
         installedAt == firstInstallTime && updatedAt == lastUpdateTime
 
-    fun encode() = "$installedAt|$updatedAt|$category|$retryAt"
+    fun encode() = "$installedAt|$updatedAt|$category|$retryAt|$failures"
 
     companion object {
         fun decode(raw: String?): PlayCategoryRecord? {
             val parts = raw?.split('|') ?: return null
-            if (parts.size != 4) return null
+            if (parts.size !in 4..5) return null
             return PlayCategoryRecord(parts[0].toLongOrNull() ?: return null,
-                parts[1].toLongOrNull() ?: return null, parts[2], parts[3].toLongOrNull() ?: return null)
+                parts[1].toLongOrNull() ?: return null, parts[2], parts[3].toLongOrNull() ?: return null,
+                if (parts.size == 5) (parts[4].toIntOrNull() ?: return null).takeIf { it in 0..100 } ?: return null else 0,
+                legacy = parts.size == 4)
         }
     }
 }

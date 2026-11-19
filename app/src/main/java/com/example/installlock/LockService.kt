@@ -18,7 +18,6 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
-import com.example.delayedsecrect.SecretClipboard
 
 class LockService : Service() {
 
@@ -79,7 +78,6 @@ class LockService : Service() {
                         "Device policy" to { Policy.sweep(this@LockService) },
                         "Banking mode" to { BankingMode.reconcile(this@LockService) },
                         "Finance discovery" to { if (BankingAppStore.detectFinance(this@LockService)) BankingCategoryDiscovery.refresh(this@LockService) },
-                        "Clipboard cleanup" to { SecretClipboard.reconcile() },
                         "Keyword removals" to { Store.applyDueKeywordRemovals(this@LockService) },
                         "Scheduled tasks" to { ScheduledTasks.reconcileAsync(this@LockService) },
                         "Retired cleanup" to { RetiredFeatureCleanup.schedule(this@LockService) },
@@ -88,12 +86,11 @@ class LockService : Service() {
                 }
                 EnforcementRecovery.arm(this@LockService)
                 BackgroundPowerProtection.ensureEnabled(this@LockService)
-                // Enforcement takes priority over optional task/clipboard maintenance.
+                // Enforcement takes priority over optional task maintenance.
                 TemporaryLinks.reconcile(this@LockService)
                 Policy.sweep(this@LockService)
                 BankingMode.reconcile(this@LockService)
                 if (BankingAppStore.detectFinance(this@LockService)) BankingCategoryDiscovery.refresh(this@LockService)
-                SecretClipboard.reconcile()
                 Store.applyDueKeywordRemovals(this@LockService)
                 ScheduledTasks.reconcileAsync(this@LockService)
                 RetiredFeatureCleanup.schedule(this@LockService)
@@ -140,7 +137,6 @@ class LockService : Service() {
             startForeground(1, n)
         }
         EnforcementRecovery.arm(this, force = true)
-        SecretClipboard.initialize(this)
         registerReceiver(
             pkgReceiver,
             IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }

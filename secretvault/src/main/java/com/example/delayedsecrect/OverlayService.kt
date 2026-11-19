@@ -191,7 +191,10 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                     },
                     onDrag = ::onOverlayDragged,
                     onCopy = {
-                        read()?.let { SecretClipboard.copyWithOptions(this@OverlayService, it.value) }
+                        read()?.let {
+                            copySecretToClipboard(this@OverlayService, it.value)
+                            feedback.value = "Password copied."
+                        }
                     },
                     onEnter = {
                         read()?.let { grant ->

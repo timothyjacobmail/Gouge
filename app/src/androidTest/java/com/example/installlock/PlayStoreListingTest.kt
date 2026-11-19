@@ -48,4 +48,26 @@ class PlayStoreListingTest {
             """"author":{"@type":"Person","applicationCategory":"FINANCE"},"applicationCategory":"ENTERTAINMENT"""")
         assertEquals("ENTERTAINMENT", PlayStoreListing.category(html, "example.app"))
     }
+    @Test fun streamingStopsAfterMatchingMetadataWithoutDownloadingTheRemainingPage() {
+        val content=listing("FINANCE")+"x".repeat(2_000_000)
+        val raw=java.io.ByteArrayInputStream(content.toByteArray())
+        var wireBytes=0
+        val limited=LimitedNetworkInput(raw,PlayListingReader.MAX_WIRE_BYTES){wireBytes+=it}
+        assertEquals("FINANCE",PlayListingReader.category(limited){PlayStoreListing.category(it,"example.app")})
+        assertTrue(wireBytes<=8192); assertTrue(raw.available()>1_990_000)
+    }
+    @Test fun streamingHandlesMetadataAcrossReadBoundariesAndDoesNotUseRecommendations() {
+        val content="x".repeat(8100)+listing("FINANCE","different.app")+listing("SHOPPING")+"x".repeat(1_000_000)
+        val raw=java.io.ByteArrayInputStream(content.toByteArray())
+        assertEquals("SHOPPING",PlayListingReader.category(raw){PlayStoreListing.category(it,"example.app")})
+        assertTrue(raw.available()>990_000)
+    }
+    @Test fun metadataAfterMoreThanOneMegabyteRemainsReadableThroughGzip() {
+        val content="<script>"+"x".repeat(1_150_000)+"</script>"+listing("FINANCE")+"x".repeat(200000)
+        val compressed=java.io.ByteArrayOutputStream().apply { java.util.zip.GZIPOutputStream(this).use { it.write(content.toByteArray()) } }.toByteArray()
+        var bytes=0
+        val wire=LimitedNetworkInput(java.io.ByteArrayInputStream(compressed),PlayListingReader.MAX_WIRE_BYTES){bytes+=it}
+        assertEquals("FINANCE",java.util.zip.GZIPInputStream(wire).use { stream -> PlayListingReader.category(stream){PlayStoreListing.category(it,"example.app")} })
+        assertTrue(bytes<8192)
+    }
 }

@@ -241,6 +241,8 @@ Use **Banking mode → Turn accessibility off for banking** before opening a ban
 
 The Banking/Finance list can discover apps from their Google Play Finance category, with manual additions for others. Each newly enrolled installation has a fixed **15-minute eligibility wait**. Removing/re-adding that same installation does not cancel its pending wait; reinstalling creates a new installation. Finance includes more than banking, and a category is not proof that an app requires accessibility to be off.
 
+Automatic Finance discovery uses unmetered internet and reuses verified metadata for the same installed app version. Failed lookups back off instead of repeatedly downloading a listing; unavailable listings wait a week. New-install category checks share bounded network allowances. Missing/unverified results keep the normal installation wait. App locks, timers and the vault operate locally; Google DNS filtering forwards only the DNS queries it receives.
+
 Banking mode does not bypass installation waits, app locks, focus, curfew, or other device-owner restrictions. A paused session remains paused after reboot until you finish it manually. Judge grants are inactive while browser monitoring is paused.
 
 ## Additional protections and background operation
@@ -256,7 +258,7 @@ Choose **Personal secret vault (optional)** on the dashboard. Add a named secret
 
 For **Import**, use a plain-text file containing one `name<TAB>secret` entry per line, with a real tab between the two fields. Blank lines and lines starting with `#` are ignored; names must be unique in the file. Review the preview before confirming. Do not share this plaintext file as if it were encrypted.
 
-The vault supports per-secret reveal delays, protected delay changes, copying, and floating password windows. Floating windows require overlay permission; direct entry into a focused password field also needs the app's accessibility integration. Clipboard cleanup and the reveal window limit availability, but copying or displaying a secret still exposes it to the receiving app or viewer.
+The vault supports per-secret reveal delays, protected delay changes, copying, and floating password windows. Floating windows require overlay permission; direct entry into a focused password field also needs the app's accessibility integration. Copying is immediate, with no clipboard-duration chooser or Gouge clipboard clearing. Password copies remain marked sensitive; Android and keyboard clipboard behaviour is independent of Gouge's reveal window.
 
 This vault is separate from the app's encrypted native task credentials. You do not need to create a personal secret for every normal Gouge task. Vault settings control its own default reveal delay and visibility window; reductions to delays and relevant visibility changes can have their own 30-minute pending-setting wait.
 

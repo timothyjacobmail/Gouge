@@ -12,7 +12,7 @@ import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Upgrade migration for features removed before Gouge. Never clears current task/vault data. */
+/** Upgrade migration for removed features. Never clears current task/vault data. */
 internal object RetiredFeatureCleanup {
     private val executor = Executors.newSingleThreadExecutor()
     private val running = AtomicBoolean()
@@ -32,8 +32,16 @@ internal object RetiredFeatureCleanup {
 
     @Synchronized internal fun clean(c: Context) {
         val migration = c.getSharedPreferences("retired_features", Context.MODE_PRIVATE)
-        if (migration.getBoolean("alarm_voice_v1", false)) return
         val notifications = c.getSystemService(NotificationManager::class.java)
+        if (!migration.getBoolean("clipboard_cleanup_v1", false)) {
+            notifications.cancel(7194)
+            notifications.deleteNotificationChannel("password_clipboard_cleanup")
+            val intent = Intent().setClassName(c.packageName, "com.example.delayedsecrect.ClipboardCleanupActivity")
+            PendingIntent.getActivity(c, 7194, intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.cancel()
+            check(c.deleteSharedPreferences("secret_clipboard_cleanup")) { "Could not delete retired clipboard preferences" }
+            check(migration.edit().putBoolean("clipboard_cleanup_v1", true).commit())
+        }
+        if (migration.getBoolean("alarm_voice_v1", false)) return
         notifications.activeNotifications.filter { it.notification.channelId in channels }.forEach {
             notifications.cancel(it.tag, it.id)
         }

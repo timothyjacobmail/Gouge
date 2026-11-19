@@ -301,7 +301,7 @@ fun SecretListScreen(
                                 }) { Text("Floating password") }
                                 Row {
                                     OutlinedButton(onClick = {
-                                        SecretClipboard.copyWithOptions(context, secret.value)
+                                        copySecretToClipboard(context, secret.value)
                                     }) {
                                         Text("Copy")
                                     }
